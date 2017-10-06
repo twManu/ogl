@@ -1,1 +1,8 @@
 Please READ Tutorial 1 and don't build the tutorials yourself ! Use CMake instead. If you have a problem, read the FAQ.
+ 
+STEPS:
+	1. sudo apt-get install build-essential libgl1-mesa-dev libglew-dev libglm-dev
+	2. mkdir build
+	3. cd build
+	4. cmake ..
+	5. make (takes a while)

@@ -15,8 +15,8 @@ GLFWwindow* window;
 #include <glm/gtc/matrix_transform.hpp>
 using namespace glm;
 
-#define  WIDTH  1920
-#define  HEIGHT 1080
+#define  WIDTH  4096
+#define  HEIGHT 2160
 
 #include <common/shader.hpp>
 #include <common/texture.hpp>
@@ -63,6 +63,8 @@ int main( void )
 		getchar();
 		glfwTerminate();
 		return -1;
+	} else {
+		fprintf(stderr, "FramebufferSize = %d x %d\n", windowWidth, windowHeight);
 	}
 
 	// Ensure we can capture the escape key being pressed below
@@ -220,10 +222,15 @@ int main( void )
 	GLuint quad_programID = LoadShaders( "Passthrough.vertexshader", "WobblyTexture.fragmentshader" );
 	GLuint texID = glGetUniformLocation(quad_programID, "renderedTexture");
 	GLuint timeID = glGetUniformLocation(quad_programID, "time");
-    
+	GLuint tWidthID = glGetUniformLocation(quad_programID, "tWidth");
+	GLuint tHeightID = glGetUniformLocation(quad_programID, "tHeight");
+	int nbFrames = 0;
+	double lastTime = glfwGetTime();
+	double msgPeriodS = 3.0;
 	
 	do{
 		// Render to our framebuffer
+
 		glBindFramebuffer(GL_FRAMEBUFFER, FramebufferName);
 		glViewport(0,0,windowWidth,windowHeight); // Render on the whole framebuffer, complete from the lower left corner to the upper right
 
@@ -235,8 +242,10 @@ int main( void )
 
 		// Compute the MVP matrix from keyboard and mouse input
 		computeMatricesFromInputs();
-		glm::mat4 ProjectionMatrix = getProjectionMatrix();
-		glm::mat4 ViewMatrix = getViewMatrix();
+/*		glm::mat4 ProjectionMatrix = getProjectionMatrix();
+		glm::mat4 ViewMatrix = getViewMatrix(); */
+		glm::mat4 ProjectionMatrix = glm::mat4(1.0);
+		glm::mat4 ViewMatrix = glm::mat4(1.0); 
 		glm::mat4 ModelMatrix = glm::mat4(1.0);
 		glm::mat4 MVP = ProjectionMatrix * ViewMatrix * ModelMatrix;
 
@@ -326,6 +335,8 @@ int main( void )
 		glUniform1i(texID, 0);
 
 		glUniform1f(timeID, (float)(glfwGetTime()*10.0f) );
+		glUniform1i(tWidthID, windowWidth);
+		glUniform1i(tHeightID, windowHeight);
 
 		// 1rst attribute buffer : vertices
 		glEnableVertexAttribArray(0);
@@ -344,9 +355,15 @@ int main( void )
 
 		glDisableVertexAttribArray(0);
 
-
 		// Swap buffers
 		glfwSwapBuffers(window);
+		nbFrames++;
+		if ( glfwGetTime() - lastTime >= msgPeriodS ){ // If last prinf() was more than 1sec ago
+			// printf and reset
+			printf("%f fps\n", double(nbFrames)/msgPeriodS);
+			nbFrames = 0;
+			lastTime += msgPeriodS;
+		}
 		glfwPollEvents();
 
 	} // Check if the ESC key was pressed or the window was closed

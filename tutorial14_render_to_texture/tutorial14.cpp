@@ -15,6 +15,9 @@ GLFWwindow* window;
 #include <glm/gtc/matrix_transform.hpp>
 using namespace glm;
 
+#define  WIDTH  1920
+#define  HEIGHT 1080
+
 #include <common/shader.hpp>
 #include <common/texture.hpp>
 #include <common/controls.hpp>
@@ -38,7 +41,7 @@ int main( void )
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
 	// Open a window and create its OpenGL context
-	window = glfwCreateWindow( 1024, 768, "Tutorial 14 - Render To Texture", NULL, NULL);
+	window = glfwCreateWindow( WIDTH, HEIGHT, "Tutorial 14 - Render To Texture", NULL, NULL);
 	if( window == NULL ){
 		fprintf( stderr, "Failed to open GLFW window. If you have an Intel GPU, they are not 3.3 compatible. Try the 2.1 version of the tutorials.\n" );
 		getchar();
@@ -48,8 +51,8 @@ int main( void )
 	glfwMakeContextCurrent(window);
     
     // We would expect width and height to be 1024 and 768
-    int windowWidth = 1024;
-    int windowHeight = 768;
+    int windowWidth = WIDTH;
+    int windowHeight = HEIGHT;
     // But on MacOS X with a retina screen it'll be 1024*2 and 768*2, so we get the actual framebuffer size:
     glfwGetFramebufferSize(window, &windowWidth, &windowHeight);
 
@@ -69,7 +72,7 @@ int main( void )
     
     // Set the mouse at the center of the screen
     glfwPollEvents();
-    glfwSetCursorPos(window, 1024/2, 768/2);
+    glfwSetCursorPos(window, WIDTH/2, HEIGHT/2);
 
 	// Dark blue background
 	glClearColor(0.0f, 0.0f, 0.4f, 0.0f);

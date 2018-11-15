@@ -23,11 +23,18 @@ public:
 		DBG(1, "Shader\n");
 	}
 	~Shader() {
+		destroy();
 		DBG(1, "~Shader\n");
-		delProg();
-		glDeleteProgram(m_program);
 	}
 
+	void destroy() {
+		delProg();
+		if( m_program ) {
+			DBG(1, "destroy\n");
+			glDeleteProgram(m_program);
+			m_program = 0;
+		}
+	}
 	bool addProg(GLenum type, const GLchar *src) {
 		DBG(1, "addProg %d\n", type);
 		if( !m_program ) {
@@ -141,6 +148,7 @@ private:
 	std::vector<GLuint>  m_shaders;
 	int                  m_dbgLevel;
 	void delProg() {
+		if( !m_shaders.size() ) return;
 		DBG(1, "delProg\n");
 		for (std::vector<GLuint>::iterator i = m_shaders.begin() ;
 			i != m_shaders.end();

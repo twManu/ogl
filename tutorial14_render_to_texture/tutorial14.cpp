@@ -13,6 +13,7 @@ GLFWwindow* window;
 // Include GLM
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <common/shaderProgram.h>
 using namespace glm;
 
 #define  WIDTH  4096
@@ -24,8 +25,11 @@ using namespace glm;
 #include <common/objloader.hpp>
 #include <common/vboindexer.hpp>
 
+
 int main( void )
 {
+	Shader StandardShadingRTT;
+
 	// Initialise GLFW
 	if( !glfwInit() )
 	{
@@ -92,7 +96,9 @@ int main( void )
 	glBindVertexArray(VertexArrayID);
 
 	// Create and compile our GLSL program from the shaders
-	GLuint programID = LoadShaders( "StandardShadingRTT.vertexshader", "StandardShadingRTT.fragmentshader" );
+	StandardShadingRTT.load("StandardShadingRTT");
+	StandardShadingRTT.link();
+	GLuint programID = StandardShadingRTT.getProg();
 
 	// Get a handle for our "MVP" uniform
 	GLuint MatrixID = glGetUniformLocation(programID, "MVP");
@@ -141,7 +147,7 @@ int main( void )
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned short), &indices[0], GL_STATIC_DRAW);
 
 	// Get a handle for our "LightPosition" uniform
-	glUseProgram(programID);
+	StandardShadingRTT.use();
 	GLuint LightID = glGetUniformLocation(programID, "LightPosition_worldspace");
 
 
@@ -375,7 +381,6 @@ int main( void )
 	glDeleteBuffers(1, &uvbuffer);
 	glDeleteBuffers(1, &normalbuffer);
 	glDeleteBuffers(1, &elementbuffer);
-	glDeleteProgram(programID);
 	glDeleteTextures(1, &Texture);
 
 	glDeleteFramebuffers(1, &FramebufferName);

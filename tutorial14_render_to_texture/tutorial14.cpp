@@ -13,7 +13,7 @@ GLFWwindow* window;
 // Include GLM
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#include <common/shaderProgram.h>
+#include <common/Shader.h>
 using namespace glm;
 
 #define  WIDTH  4096
@@ -28,7 +28,6 @@ using namespace glm;
 
 int main( void )
 {
-	Shader StandardShadingRTT;
 
 	// Initialise GLFW
 	if( !glfwInit() )
@@ -57,6 +56,9 @@ int main( void )
     // We would expect width and height to be 1024 and 768
     int windowWidth = WIDTH;
     int windowHeight = HEIGHT;
+    Shader StandardShadingRTT;
+    StandardShadingRTT.setDebug(1);
+
     // But on MacOS X with a retina screen it'll be 1024*2 and 768*2, so we get the actual framebuffer size:
     glfwGetFramebufferSize(window, &windowWidth, &windowHeight);
 
@@ -96,7 +98,7 @@ int main( void )
 	glBindVertexArray(VertexArrayID);
 
 	// Create and compile our GLSL program from the shaders
-	StandardShadingRTT.load("StandardShadingRTT");
+	StandardShadingRTT.load((char *)"StandardShadingRTT");
 	StandardShadingRTT.link();
 	GLuint programID = StandardShadingRTT.getProg();
 

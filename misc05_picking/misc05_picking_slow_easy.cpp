@@ -26,6 +26,7 @@ using namespace glm;
 #include <common/controls.hpp>
 #include <common/objloader.hpp>
 #include <common/vboindexer.hpp>
+#include <common/save_screen.h>
 
 int main( void )
 {
@@ -380,6 +381,15 @@ int main( void )
 
 		// Swap buffers
 		glfwSwapBuffers(window);
+#if 1
+		save_screen("/dev/null");
+#else
+		static int saved = 0;
+		if( 1==saved++ ) {
+			//0 is black
+			save_screen("screen1.ppm");
+		}
+#endif
 		glfwPollEvents();
 
 	} // Check if the ESC key was pressed or the window was closed

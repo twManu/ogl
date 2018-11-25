@@ -38,6 +38,10 @@ int main( void )
 		return -1;
 	}
 	glfwMakeContextCurrent(window);
+	fprintf(stderr, "apple ycbcr %s\n",
+		glfwExtensionSupported("GL_APPLE_ycbcr_422") ? "supported" : "not supported");
+	fprintf(stderr, "mesa ycbcr %s\n",
+		glfwExtensionSupported("GL_MESA_ycbcr_texture") ? "supported" : "not supported");
 
 	// Initialize GLEW
 	if (glewInit() != GLEW_OK) {

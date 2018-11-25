@@ -15,6 +15,7 @@ GLFWwindow* window;
 #include <glm/gtc/matrix_transform.hpp>
 #include <common/Shader.h>
 #include <common/FBO.h>
+#include <common/save_screen.h>
 using namespace glm;
 
 #define  WIDTH  4096
@@ -187,6 +188,11 @@ int main( void )
 	int nbFrames = 0;
 	double lastTime = glfwGetTime();
 	double msgPeriodS = 3.0;
+#if 0
+	cSaveScrn save_screen(0, windowWidth, windowHeight, (char *)"screen%03d.ppm", 100);
+#else
+	cSaveScrn save_screen;
+#endif
 	
 	do{
 		// Render to our framebuffer
@@ -317,6 +323,7 @@ int main( void )
 
 		// Swap buffers
 		glfwSwapBuffers(window);
+		save_screen.nSave();
 		nbFrames++;
 		if ( glfwGetTime() - lastTime >= msgPeriodS ){ // If last prinf() was more than 1sec ago
 			// printf and reset

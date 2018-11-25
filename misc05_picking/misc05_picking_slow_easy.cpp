@@ -63,6 +63,11 @@ int main( void )
 		return -1;
 	}
 
+#if 1
+        cSaveScrn save_screen(0, 1024, 768, "screen%03d.ppm", 10);
+#else
+        cSaveScrn save_screen;
+#endif
 	// Initialize the GUI
 	TwInit(TW_OPENGL_CORE, NULL);
 	TwWindowSize(1024, 768);
@@ -381,15 +386,7 @@ int main( void )
 
 		// Swap buffers
 		glfwSwapBuffers(window);
-#if 1
-		save_screen("/dev/null");
-#else
-		static int saved = 0;
-		if( 1==saved++ ) {
-			//0 is black
-			save_screen("screen1.ppm");
-		}
-#endif
+		save_screen.nSave();
 		glfwPollEvents();
 
 	} // Check if the ESC key was pressed or the window was closed

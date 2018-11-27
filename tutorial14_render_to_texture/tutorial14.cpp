@@ -16,6 +16,7 @@ GLFWwindow* window;
 #include <common/Shader.h>
 #include <common/FBO.h>
 #include <common/save_screen.h>
+#include <common/baseGL.h>
 using namespace glm;
 
 #define  WIDTH  4096
@@ -27,6 +28,7 @@ using namespace glm;
 #include <common/objloader.hpp>
 #include <common/vboindexer.hpp>
 
+baseGL g_baseGL;
 
 int main( void )
 {
@@ -54,7 +56,7 @@ int main( void )
 		return -1;
 	}
 	glfwMakeContextCurrent(window);
-    
+	g_baseGL.getInfo();
     // We would expect width and height to be 1024 and 768
     int windowWidth = WIDTH;
     int windowHeight = HEIGHT;

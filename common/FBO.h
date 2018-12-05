@@ -7,12 +7,13 @@
 #include <vector>
 #include <string.h>
 
-
+#ifndef DBG
 #define DBG(level, fmt, arg...)                     \
 	do {                                        \
-		if( level>=m_dbgLevel )             \
+		if( m_dbgLevel>=level )             \
 			fprintf(stderr, fmt, ##arg);\
 	} while( 0 )
+#endif //DBG
 
 
 class FBO

@@ -7,16 +7,18 @@
 #include <vector>
 #include <string.h>
 
-
+#ifndef DBG
 #define DBG(level, fmt, arg...)                     \
 	do {                                        \
-		if( level>=m_dbgLevel )             \
+		if( m_dbgLevel>=level )             \
 			fprintf(stderr, fmt, ##arg);\
 	} while( 0 )
+#endif //DBG
 
 
 class Shader
 {
+#define FNAME_SIZE         1024
 public:
 	Shader(): m_dbgLevel(0)
 		, m_program(0) {
@@ -36,7 +38,9 @@ public:
 		}
 	}
 	bool addProg(GLenum type, const GLchar *src) {
-		DBG(1, "addProg %d\n", type);
+		DBG(1, "%s addProg %s\n", m_progName.c_str(),
+			GL_FRAGMENT_SHADER==type?"FRAGMENT"\
+			 : GL_VERTEX_SHADER==type?"VERTEX":"unknown");
 		if( !m_program ) {
 			m_program = glCreateProgram();
 			if( !m_program ) {
@@ -78,7 +82,7 @@ public:
 	}
 	bool link() {
 		GLint status;
-		DBG(1, "link\n");
+		DBG(1, "link %s\n", m_progName.c_str());
 		if( !m_program ) {
 			DBG(0, "Shader program not created.\n");
 			return false;
@@ -93,14 +97,15 @@ public:
 			free(log);
 		}
 		glGetProgramiv(m_program, GL_LINK_STATUS, &status);
-		if (status == 0) {
+		if (GL_FALSE==status) {
+			DBG(0, "%s link fail\n", m_progName.c_str());
 			return false;
 		}
 		return true;
 	}
 	void use() {
 		GLenum glerr;
-		DBG(1, "use\n");
+		DBG(1, "use %s\n", m_progName.c_str());
 		glUseProgram(m_program);
 		glerr = glGetError();
 		if (glerr == GL_INVALID_VALUE) {
@@ -115,9 +120,10 @@ public:
 		const char* fileExt[] = {".fsh",".vsh"};
 		static unsigned int shaderType[] = {GL_FRAGMENT_SHADER, GL_VERTEX_SHADER};
 		FILE *f;
-		DBG(1, "load %s\n", fileName);
+
+		m_progName = fileName;
 		for (int i=0; i<2; i++){
-			std::string shaderName = std::string(fileName) + fileExt[i];
+			std::string shaderName = m_progName + fileExt[i];
 			f = fopen(shaderName.c_str(), "rb");
 			if (f) {
 				fseek(f, 0, SEEK_END);
@@ -127,6 +133,7 @@ public:
 					char *src = (char*)malloc(fileSize+1);
 					memset(src,0,fileSize+1);
 					long bytesRead = fread(src, 1, fileSize, f);
+					DBG(1, "load %s, %ld B\n", shaderName.c_str(), bytesRead);
 					if (bytesRead == fileSize) {
 						addProg(shaderType[i], src);
 					} else {
@@ -143,10 +150,11 @@ public:
 	GLuint getProg() {
 		return m_program;
 	}
-private:
+protected:
 	GLuint               m_program;
 	std::vector<GLuint>  m_shaders;
 	int                  m_dbgLevel;
+	std::string          m_progName;
 	void delProg() {
 		if( !m_shaders.size() ) return;
 		DBG(1, "delProg\n");

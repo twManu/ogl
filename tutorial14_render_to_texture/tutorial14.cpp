@@ -19,17 +19,129 @@ using namespace glm;
 #include <common/save_screen.h>
 #include <common/yuyv_to_rgb.h>
 #include <common/baseGL.h>
+#include "v4l2_base.h"
+#include "v4l2_base.cc"
 
-#define  WIDTH  4096
-#define  HEIGHT 2160
+#define  WIDTH  1920
+#define  HEIGHT 1080
 
 #include <common/shader.hpp>
 #include <common/texture.hpp>
 #include <common/controls.hpp>
 #include <common/objloader.hpp>
 #include <common/vboindexer.hpp>
+#include <pthread.h>
 
 baseGL g_baseGL;
+
+//v4l2
+#define MM printf("[%s:%d]\n", __FILE__, __LINE__);
+
+static char *dev_name;
+static v4l2_base *v4l2base;
+#define V4L2_BUF_COUNT       6
+static struct buffer buffers[V4L2_BUF_COUNT];
+static pthread_t v4l2_th;
+static int g_curWrite;
+static int g_curRead=-1;     //start cond
+static int g_stop = 0;
+
+void *v4l2_proc(void *dummy);
+
+int nInitV4l2()
+{
+    struct v4l2_setting v4l2setting;
+    int nbuf = V4L2_BUF_COUNT;
+    int fcnt = 0;
+    int i;
+    
+    dev_name = (char *)"/dev/video0";
+
+    v4l2base = v4l2_open(dev_name);
+    if (!v4l2base) {
+        return -1;
+    }
+    
+    memset(&v4l2setting, 0, sizeof(v4l2setting));
+    memset(&buffers, 0, sizeof(buffers));
+    v4l2setting.width = WIDTH;
+    v4l2setting.height = HEIGHT;
+    v4l2setting.format = V4L2_PIX_FMT_YUYV;
+    v4l2setting.io = IO_MEMORY_USERPTR;
+    if (v4l2_init(v4l2base, &v4l2setting) < 0)
+        return -1;
+    
+    //alloc buffer
+    for (i = 0; i < nbuf; ++i) {
+        buffers[i].index = i;
+        buffers[i].length = v4l2setting.width*v4l2setting.height*2;
+	//YUYV
+        buffers[i].start = malloc(v4l2setting.width*v4l2setting.height*2);
+    }
+    
+    if (v4l2_req_buf(v4l2base, &nbuf, buffers) < 0)
+        return -1;
+    
+    printf("req count: %d\n", nbuf);
+    
+	if (pthread_create(&v4l2_th, NULL, v4l2_proc, NULL)) {
+		printf("Failed creating v4l2 thread\n");
+		v4l2_th = (pthread_t) NULL;
+		return -1;
+	}
+    return 0;
+}
+
+
+void *v4l2_proc(void *dummy)
+{
+	struct buffer *buf;
+	if (v4l2_start_streaming(v4l2base) < 0) {
+		printf("fail to start streaming\n");
+		return NULL;
+	}
+	while( !g_stop ) {
+		buf = v4l2_dqbuf(v4l2base);
+		if (buf) {
+			if( g_curWrite==g_curRead ) {
+				printf("v4l2 buffer overflow\n"); //skip
+			} else {
+				//adv wptr
+				if( ++g_curWrite>=V4L2_BUF_COUNT )
+					g_curWrite = 0;
+			}
+			v4l2_qbuf(v4l2base, buf);
+        	}
+	}
+	return NULL;
+}
+ 
+void finiV4l2()
+{
+	int i;
+	void *result = NULL;
+	if( v4l2_th ) {
+		g_stop = 1;
+		pthread_join(v4l2_th, &result);
+	}
+    if (v4l2_stop_streaming(v4l2base) < 0)
+        return ;
+    
+    if (v4l2_uninit(v4l2base) < 0)
+        return ;
+    
+    v4l2_close(v4l2base);
+    
+	//free buffer
+	for (i = 0; i < V4L2_BUF_COUNT; ++i) {
+		if( buffers[i].start ) {
+			free(buffers[i].start);
+			buffers[i].start=NULL;
+		}
+	}
+    
+}
+//v4l2
 
 int main( void )
 {
@@ -79,6 +191,12 @@ int main( void )
 		fprintf(stderr, "FramebufferSize = %d x %d\n", windowWidth, windowHeight);
 	}
 
+	if( nInitV4l2() ) {
+		fprintf(stderr, "Failed to initialize GLEW\n");
+		getchar();
+		glfwTerminate();
+		return -1;
+	}
 	yuv2rgb.setDebug(1);
 	if( !yuv2rgb.Init() ) {
 		fprintf(stderr, "Failed to initialize yuv shader\n");
@@ -296,7 +414,17 @@ int main( void )
 		// Render to the screen
 
 		GLuint renderedTexture = fbo.unbind();
-		yuv2rgb.Apply();
+		if( g_curRead<0 ) {
+			//1st read point
+			if( g_curWrite ) g_curRead = g_curWrite - 1;
+			else g_curRead = V4L2_BUF_COUNT - 1;
+			//printf("read start at %d\n", g_curRead);
+		} else {
+			if( ++g_curRead>=V4L2_BUF_COUNT )
+				g_curRead = 0;
+			//printf("read = %d\n", g_curRead);
+		}
+		yuv2rgb.Apply(buffers[g_curRead].start);
         // Render on the whole framebuffer, complete from the lower left corner to the upper right
 		glViewport(0,0,windowWidth,windowHeight);
 
@@ -349,6 +477,7 @@ int main( void )
 	while( glfwGetKey(window, GLFW_KEY_ESCAPE ) != GLFW_PRESS &&
 		   glfwWindowShouldClose(window) == 0 );
 
+	finiV4l2();
 	// Cleanup VBO and shader
 	glDeleteBuffers(1, &vertexbuffer);
 	glDeleteBuffers(1, &uvbuffer);
@@ -360,7 +489,7 @@ int main( void )
 
 	glDeleteBuffers(1, &quad_vertexbuffer);
 	glDeleteVertexArrays(1, &VertexArrayID);
-
+	//todo wait thread
 
 	// Close OpenGL window and terminate GLFW
 	glfwTerminate();

@@ -105,7 +105,7 @@ public:
 	}
 	void use() {
 		GLenum glerr;
-		DBG(1, "use %s\n", m_progName.c_str());
+		DBG(2, "use %s\n", m_progName.c_str());
 		glUseProgram(m_program);
 		glerr = glGetError();
 		if (glerr == GL_INVALID_VALUE) {

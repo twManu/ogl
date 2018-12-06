@@ -99,7 +99,7 @@ public:
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 		return 1;
 	}
-	int Apply(int is709=1) {
+	int Apply(const GLvoid *buf=NULL, int is709=1) {
 		use();
 		glUniform2f(m_varId[IN_OVER_OUT0], (GLfloat) m_inWidth/m_outWidth,
 			(GLfloat) m_inHeight/m_outHeight);
@@ -119,6 +119,9 @@ public:
 			glUniform3fv(m_varId[COEFF3], 1, from_yuv_bt601_bcoeff);
 		}
 		//texture
+		glActiveTexture(GL_TEXTURE0);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RG, m_inWidth, m_inHeight, 0, GL_RG, GL_UNSIGNED_BYTE, buf);
+		glBindTexture(GL_TEXTURE_2D, m_inTexture);
 		glUniform1i(m_varId[Y_TEX], 0);
 		return 1;
 	}

@@ -80,7 +80,12 @@ int main( void )
 	}
 
 	yuv2rgb.setDebug(1);
-	if( yuv2rgb.Init() ) yuv2rgb.Apply();
+	if( !yuv2rgb.Init() ) {
+		fprintf(stderr, "Failed to initialize yuv shader\n");
+		getchar();
+		glfwTerminate();
+		return -1;
+	}
 	// Ensure we can capture the escape key being pressed below
 	glfwSetInputMode(window, GLFW_STICKY_KEYS, GL_TRUE);
     // Hide the mouse and enable unlimited mouvement
@@ -291,6 +296,7 @@ int main( void )
 		// Render to the screen
 
 		GLuint renderedTexture = fbo.unbind();
+		yuv2rgb.Apply();
         // Render on the whole framebuffer, complete from the lower left corner to the upper right
 		glViewport(0,0,windowWidth,windowHeight);
 

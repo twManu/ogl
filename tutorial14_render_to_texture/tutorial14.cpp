@@ -31,6 +31,7 @@ using namespace glm;
 #include <common/objloader.hpp>
 #include <common/vboindexer.hpp>
 #include <pthread.h>
+#include <list>
 
 baseGL g_baseGL;
 
@@ -42,9 +43,12 @@ static v4l2_base *v4l2base;
 #define V4L2_BUF_COUNT       6
 static struct buffer buffers[V4L2_BUF_COUNT];
 static pthread_t v4l2_th;
-static int g_curWrite;
-static int g_curRead=-1;     //start cond
 static int g_stop = 0;
+pthread_mutex_t g_freeLock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t g_useLock = PTHREAD_MUTEX_INITIALIZER;
+//index
+std::list<int>       g_free;
+std::list<int>       g_use;
 
 void *v4l2_proc(void *dummy);
 
@@ -96,6 +100,8 @@ int nInitV4l2()
 void *v4l2_proc(void *dummy)
 {
 	struct buffer *buf;
+	int index;
+
 	if (v4l2_start_streaming(v4l2base) < 0) {
 		printf("fail to start streaming\n");
 		return NULL;
@@ -103,15 +109,19 @@ void *v4l2_proc(void *dummy)
 	while( !g_stop ) {
 		buf = v4l2_dqbuf(v4l2base);
 		if (buf) {
-			if( g_curWrite==g_curRead ) {
-				printf("v4l2 buffer overflow\n"); //skip
-			} else {
-				//adv wptr
-				if( ++g_curWrite>=V4L2_BUF_COUNT )
-					g_curWrite = 0;
+			pthread_mutex_lock(&g_useLock);
+			g_use.push_back(buf->index);
+			pthread_mutex_unlock(&g_useLock);
+		}
+		if( g_free.size() ) {
+			pthread_mutex_lock(&g_freeLock);
+			while( g_free.size() ) {
+				index = *(g_free.begin());
+				g_free.pop_front();
+				v4l2_qbuf(v4l2base, buffers+index);
 			}
-			v4l2_qbuf(v4l2base, buf);
-        	}
+			pthread_mutex_unlock(&g_freeLock);
+		}
 	}
 	return NULL;
 }
@@ -248,7 +258,9 @@ int main( void )
 	cSaveScrn save_screen;
 #endif
 	
+	void *curBuf=NULL;
 	do{
+		int index;
 		// Render to our framebuffer
 		glViewport(0,0,windowWidth,windowHeight); // Render on the whole framebuffer, complete from the lower left corner to the upper right
 
@@ -302,18 +314,21 @@ int main( void )
 
 
 		// Render to the screen
+		index = -1;
 
-		if( g_curRead<0 ) {
-			//1st read point
-			if( g_curWrite ) g_curRead = g_curWrite - 1;
-			else g_curRead = V4L2_BUF_COUNT - 1;
-			//printf("read start at %d\n", g_curRead);
-		} else {
-			if( ++g_curRead>=V4L2_BUF_COUNT )
-				g_curRead = 0;
-			//printf("read = %d\n", g_curRead);
+		pthread_mutex_lock(&g_useLock);
+		if( g_use.size() ) {
+			index = *(g_use.begin());
+			g_use.pop_front();
+			curBuf=buffers[index].start;
 		}
-		yuv2rgb.Apply(buffers[g_curRead].start);
+		pthread_mutex_unlock(&g_useLock);
+		yuv2rgb.Apply(curBuf);
+		if( index>=0 ) {
+			pthread_mutex_lock(&g_freeLock);
+			g_free.push_back(index);
+			pthread_mutex_unlock(&g_freeLock);
+		}
         // Render on the whole framebuffer, complete from the lower left corner to the upper right
 /*
 		glViewport(0,0,windowWidth,windowHeight);

@@ -42,6 +42,13 @@ protected:
 	int                  m_outHeight;
 	//shader var
 	GLuint               m_varId[10];
+	GLuint               m_vao;
+	enum {
+		  ATTR_0_VERTEX
+		, ATTR_1_TEXCOORD
+		, ATTR_END
+	};
+	GLuint               m_vbo[ATTR_END];
 
 public:
 	//index of shader var
@@ -78,6 +85,67 @@ public:
 			return 0;
 		}
 		load((char *)"/opt/.gh/ogl/common/yuyv_to_rgba");
+		const GLfloat vertex[6][3] = {
+			{ -1.0f, -1.0f, 0.0f }, /* BL */
+			{  1.0f, -1.0f, 0.0f }, /* BR */
+			{ -1.0f,  1.0f, 0.0f }, /* TL */
+			{ -1.0f,  1.0f, 0.0f }, /* TL */
+			{  1.0f, -1.0f, 0.0f }, /* BR */
+			{  1.0,   1.0f, 0.0f }  /* TR */
+		};
+
+		//texture from UVC is TL first
+		const GLfloat texcoord[6][2] = {
+			{ 0.0f, 1.0f }, /* TL */
+			{ 1.0f, 1.0f }, /* TR */
+			{ 0.0f, 0.0f }, /* BL */
+			{ 0.0f, 0.0f }, /* BL */
+			{ 1.0f, 1.0f }, /* TR */
+			{ 1.0f, 0.0f }  /* BR */
+#if 0
+			{ 0.0f, 0.0f }, /* BL */
+			{ 1.0f, 0.0f }, /* BR */
+			{ 0.0f, 1.0f }, /* TL */
+			{ 0.0f, 1.0f }, /* TL */
+			{ 1.0f, 0.0f }, /* BR */
+			{ 1.0f, 1.0f }  /* TR */
+#endif
+		};
+		 /* Allocate and assign a Vertex Array Object to our handle */
+		glGenVertexArrays(1, &m_vao);
+		/* Bind our Vertex Array Object as the current used object */
+		glBindVertexArray(m_vao);
+		/* Allocate and assign two Vertex Buffer Objects to our handle */
+		glGenBuffers(ATTR_END, m_vbo);
+		/* Bind our first VBO as being the active buffer and storing vertex attributes (coordinates) */
+		glBindBuffer(GL_ARRAY_BUFFER, m_vbo[0]);
+		/* Copy the vertex data from diamond to our buffer */
+		/* 8 * sizeof(GLfloat) is the size of the diamond array, since it contains 8 GLfloat values */
+		glBufferData(GL_ARRAY_BUFFER, 18 * sizeof(GLfloat), vertex, GL_STATIC_DRAW);
+
+		/* Specify that our coordinate data is going into attribute index 0, and contains 3 floats per vertex */
+		glVertexAttribPointer(ATTR_0_VERTEX, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+		/* Enable attribute index 0 as being used */
+		glEnableVertexAttribArray(0);
+
+		/* Bind our second VBO as being the active buffer and storing vertex attributes (colors) */
+		glBindBuffer(GL_ARRAY_BUFFER, m_vbo[1]);
+		/* Copy the color data from colors to our buffer */
+		/* 12 * sizeof(GLfloat) is the size of the colors array, since it contains 12 GLfloat values */
+		glBufferData(GL_ARRAY_BUFFER, 12 * sizeof(GLfloat), texcoord, GL_STATIC_DRAW);
+
+		/* Specify that our color data is going into attribute index 1, and contains 2 floats per vertex */
+		glVertexAttribPointer(ATTR_1_TEXCOORD, 2, GL_FLOAT, GL_FALSE, 0, 0);
+
+		/* Enable attribute index 1 as being used */
+		glEnableVertexAttribArray(1);
+#if 0
+		/* Bind attribute index 0 (coordinates) to in_Position and attribute index 1 (color) to in_Color */
+		/* Attribute locations must be setup before calling glLinkProgram. */
+		glBindAttribLocation(m_program, ATTR_0_VERTEX, "a_position");
+		glBindAttribLocation(m_program, ATTR_1_TEXCOORD, "a_texcoord");/* Bind attribute index 0 (coordinates) to in_Position and attribute index 1 (color) to in_Color */
+#endif
 		if( false==link() ) {
 			DBG(0, "fail to link shader\n");
 			return 0;
@@ -123,6 +191,7 @@ public:
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RG, m_inWidth, m_inHeight, 0, GL_RG, GL_UNSIGNED_BYTE, buf);
 		glBindTexture(GL_TEXTURE_2D, m_inTexture);
 		glUniform1i(m_varId[Y_TEX], 0);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
 		return 1;
 	}
 };

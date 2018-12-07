@@ -4,9 +4,7 @@
 #include "Shader.h"
 
 static const char *g_vars[] = {
-	  "inOverOut0"
-	, "outWidth"
-	, "outHeight"
+	  "outWidth"
 	, "oneOverInX"
 	, "color709"
 	, "Ytex"
@@ -32,9 +30,7 @@ protected:
 public:
 	//index of shader var
 	enum {
-		  IN_OVER_OUT0
-		, OUT_WIDTH
-		, OUT_HEIGHT
+		  OUT_WIDTH
 		, ONE_OVER_INx
 		, COLOR709
 		, Y_TEX
@@ -145,17 +141,14 @@ public:
 	}
 	int Apply(const GLvoid *buf=NULL, int is709=1) {
 		use();
-		glUniform2f(m_varId[IN_OVER_OUT0], (GLfloat) m_inWidth/m_outWidth,
-			(GLfloat) m_inHeight/m_outHeight);
 		glUniform1f(m_varId[OUT_WIDTH], (GLfloat) m_outWidth);
-		glUniform1f(m_varId[OUT_HEIGHT], (GLfloat) m_outHeight);
                 glUniform1f(m_varId[ONE_OVER_INx], 1.0/m_inWidth);
 		//color
 		glUniform1i(m_varId[COLOR709], is709);
 		//texture
 		glActiveTexture(GL_TEXTURE0);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RG, m_inWidth, m_inHeight, 0, GL_RG, GL_UNSIGNED_BYTE, buf);
 		glBindTexture(GL_TEXTURE_2D, m_inTexture);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RG, m_inWidth, m_inHeight, 0, GL_RG, GL_UNSIGNED_BYTE, buf);
 		glUniform1i(m_varId[Y_TEX], 0);
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 		return 1;

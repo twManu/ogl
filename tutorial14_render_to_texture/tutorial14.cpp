@@ -22,13 +22,14 @@ using namespace glm;
 #include "v4l2_base.h"
 #include "v4l2_base.cc"
 
-/*
-failure
+//failure
+#if 0
 #define  V4L2_WIDTH   1280
 #define  V4L2_HEIGHT   720
- */
+#else
 #define  V4L2_WIDTH   1920
 #define  V4L2_HEIGHT  1080
+#endif
 #define  WIDTH  1920
 #define  HEIGHT 1080
 

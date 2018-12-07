@@ -5,26 +5,33 @@ uniform float outWidth;
 uniform float outHeight;
 uniform float oneOverInX;
 
-uniform vec3 offset;
-uniform vec3 coeff1;
-uniform vec3 coeff2;
-uniform vec3 coeff3;
+uniform int color709;
 uniform sampler2D Ytex;
 
 in vec2 v_texcoord;
 layout (location = 0) out vec4 fragColor;
 
-vec3 yuv_to_rgb (vec3 val, vec3 offset, vec3 ycoeff, vec3 ucoeff, vec3 vcoeff) {
+vec3 yuv_to_rgb (vec3 val, mat3 coff_yuv) {
 	vec3 rgb;
-	val += offset;
-	rgb.r = dot(val, ycoeff);
-	rgb.g = dot(val, ucoeff);
-	rgb.b = dot(val, vcoeff);
+	val += vec3(-0.0625, -0.5, -0.5);
+	rgb.r = dot(val, coff_yuv[0]);
+	rgb.g = dot(val, coff_yuv[1]);
+	rgb.b = dot(val, coff_yuv[2]);
 	return rgb;
-}
+} 
 
 
 void main (void) {
+	mat3 m_709 = mat3(
+		1.164,  0.000,  1.787,  // first column 
+		1.164, -0.213, -0.531,  // second column
+		1.164,  2.112,  0.000   // third column
+	);
+	mat3 m_601 = mat3(
+		1.164,  0.000,  1.596,  // first column 
+		1.164, -0.391, -0.813,  // second column
+		1.164,  2.018,  0.000   // third column
+	);
 	vec2 texcoord;
 	texcoord = v_texcoord;
 	vec4 rgba, uv_texel;
@@ -44,7 +51,9 @@ void main (void) {
 	uv_texel.ba = texture(Ytex, texcoord * inOverOut0 + vec2(dx2, 0.0)).rg;
 	//U0V0, U2V2
 	yuv.yz = uv_texel.ga;
-	rgba.rgb = yuv_to_rgb (yuv, offset, coeff1, coeff2, coeff3);
+	//rgba.rgb = yuv_to_rgb(yuv, offset, coeff1, coeff2, coeff3);
+	if( color709!=0 ) rgba.rgb = yuv_to_rgb(yuv, m_709);
+	else rgba.rgb = yuv_to_rgb(yuv, m_601);
 	rgba.a = 1.0;
 	fragColor = vec4(rgba.r,rgba.g,rgba.b,rgba.a);
 }

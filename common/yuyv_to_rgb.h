@@ -8,30 +8,9 @@ static const char *g_vars[] = {
 	, "outWidth"
 	, "outHeight"
 	, "oneOverInX"
-	, "offset"
-	, "coeff1"
-	, "coeff2"
-	, "coeff3"
+	, "color709"
 	, "Ytex"
 };
-
-/* BT. 601 standard with the following ranges:
- * Y = [16..235] (of 255)
- * Cb/Cr = [16..240] (of 255)
- */
-static const GLfloat from_yuv_bt601_offset[] = {-0.0625f, -0.5f, -0.5f};
-static const GLfloat from_yuv_bt601_rcoeff[] = {1.164f, 0.000f, 1.596f};
-static const GLfloat from_yuv_bt601_gcoeff[] = {1.164f,-0.391f,-0.813f};
-static const GLfloat from_yuv_bt601_bcoeff[] = {1.164f, 2.018f, 0.000f};
-
-/* BT. 709 standard with the following ranges:
- * Y = [16..235] (of 255)
- * Cb/Cr = [16..240] (of 255)
- */
-static const GLfloat from_yuv_bt709_offset[] = {-0.0625f, -0.5f, -0.5f};
-static const GLfloat from_yuv_bt709_rcoeff[] = {1.164f, 0.000f, 1.787f};
-static const GLfloat from_yuv_bt709_gcoeff[] = {1.164f,-0.213f,-0.531f};
-static const GLfloat from_yuv_bt709_bcoeff[] = {1.164f,2.112f, 0.000f};
 
 class cYUYV2RGBA : public Shader {
 protected:
@@ -57,10 +36,7 @@ public:
 		, OUT_WIDTH
 		, OUT_HEIGHT
 		, ONE_OVER_INx
-		, OFFSET
-		, COEFF1
-		, COEFF2
-		, COEFF3
+		, COLOR709
 		, Y_TEX
 	};
 	cYUYV2RGBA(int inW, int inH, int outW, int outH)
@@ -175,17 +151,7 @@ public:
 		glUniform1f(m_varId[OUT_HEIGHT], (GLfloat) m_outHeight);
                 glUniform1f(m_varId[ONE_OVER_INx], 1.0/m_inWidth);
 		//color
-		if( is709 ) {
-			glUniform3fv(m_varId[OFFSET], 1, from_yuv_bt709_offset);
-			glUniform3fv(m_varId[COEFF1], 1, from_yuv_bt709_rcoeff);
-			glUniform3fv(m_varId[COEFF2], 1, from_yuv_bt709_gcoeff);
-			glUniform3fv(m_varId[COEFF3], 1, from_yuv_bt709_bcoeff);
-		} else {
-			glUniform3fv(m_varId[OFFSET], 1, from_yuv_bt601_offset);
-			glUniform3fv(m_varId[COEFF1], 1, from_yuv_bt601_rcoeff);
-			glUniform3fv(m_varId[COEFF2], 1, from_yuv_bt601_gcoeff);
-			glUniform3fv(m_varId[COEFF3], 1, from_yuv_bt601_bcoeff);
-		}
+		glUniform1i(m_varId[COLOR709], is709);
 		//texture
 		glActiveTexture(GL_TEXTURE0);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RG, m_inWidth, m_inHeight, 0, GL_RG, GL_UNSIGNED_BYTE, buf);

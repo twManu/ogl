@@ -22,6 +22,13 @@ using namespace glm;
 #include "v4l2_base.h"
 #include "v4l2_base.cc"
 
+/*
+failure
+#define  V4L2_WIDTH   1280
+#define  V4L2_HEIGHT   720
+ */
+#define  V4L2_WIDTH   1920
+#define  V4L2_HEIGHT  1080
 #define  WIDTH  1920
 #define  HEIGHT 1080
 
@@ -68,8 +75,8 @@ int nInitV4l2()
     
     memset(&v4l2setting, 0, sizeof(v4l2setting));
     memset(&buffers, 0, sizeof(buffers));
-    v4l2setting.width = WIDTH;
-    v4l2setting.height = HEIGHT;
+    v4l2setting.width = V4L2_WIDTH;
+    v4l2setting.height = V4L2_HEIGHT;
     v4l2setting.format = V4L2_PIX_FMT_YUYV;
     v4l2setting.io = IO_MEMORY_USERPTR;
     if (v4l2_init(v4l2base, &v4l2setting) < 0)
@@ -183,10 +190,10 @@ int main( void )
     // We would expect width and height to be 1024 and 768
     int windowWidth = WIDTH;
     int windowHeight = HEIGHT;
-    cYUYV2RGBA yuv2rgb(1920, 1080, 1920, 1080);
 
     // But on MacOS X with a retina screen it'll be 1024*2 and 768*2, so we get the actual framebuffer size:
     glfwGetFramebufferSize(window, &windowWidth, &windowHeight);
+    cYUYV2RGBA yuv2rgb(V4L2_WIDTH, V4L2_HEIGHT, windowWidth, windowHeight);
 
 	// Initialize GLEW
 	glewExperimental = true; // Needed for core profile

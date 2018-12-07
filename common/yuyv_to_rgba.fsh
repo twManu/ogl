@@ -32,23 +32,21 @@ void main (void) {
 		1.164, -0.391, -0.813,  // second column
 		1.164,  2.018,  0.000   // third column
 	);
-	vec2 texcoord;
-	texcoord = v_texcoord;
 	vec4 rgba, uv_texel;
 	vec3 yuv;
 	float dx1 = -oneOverInX;
 	float dx2 = 0.0;
 	//Yn
-	yuv.x = texture(Ytex, texcoord * inOverOut0).r;
+	yuv.x = texture(Ytex, v_texcoord * inOverOut0).r;
 	float inorder = mod (v_texcoord.x * outWidth, 2.0);
 	if (inorder < 1.0) {
 		dx2 = -dx1;
 		dx1 = 0.0;
 	}
 	//Y0U0, Y2U2
-	uv_texel.rg = texture(Ytex, texcoord * inOverOut0 + vec2(dx1, 0.0)).rg;
+	uv_texel.rg = texture(Ytex, v_texcoord * inOverOut0 + vec2(dx1, 0.0)).rg;
 	//Y1V0, Y3V2
-	uv_texel.ba = texture(Ytex, texcoord * inOverOut0 + vec2(dx2, 0.0)).rg;
+	uv_texel.ba = texture(Ytex, v_texcoord * inOverOut0 + vec2(dx2, 0.0)).rg;
 	//U0V0, U2V2
 	yuv.yz = uv_texel.ga;
 	//rgba.rgb = yuv_to_rgb(yuv, offset, coeff1, coeff2, coeff3);

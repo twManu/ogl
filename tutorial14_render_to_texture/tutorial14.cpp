@@ -229,7 +229,7 @@ int main( void )
     glfwSetCursorPos(window, WIDTH/2, HEIGHT/2);
 
 	// Dark blue background
-	glClearColor(0.0f, 0.0f, 0.4f, 0.0f);
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
 
 	// Get a handle for our "LightPosition" uniform
@@ -330,7 +330,7 @@ int main( void )
 			curBuf=buffers[index].start;
 		}
 		pthread_mutex_unlock(&g_useLock);
-		yuv2rgb.Apply(curBuf);
+		if( curBuf ) yuv2rgb.Apply(curBuf); //update when ever got
 		if( index>=0 ) {
 			pthread_mutex_lock(&g_freeLock);
 			g_free.push_back(index);

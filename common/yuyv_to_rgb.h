@@ -3,6 +3,90 @@
 
 #include "Shader.h"
 
+static const char *yuyv_to_rgb_vshader = "       \
+#version 330 core                              \n\
+                                               \n\
+layout(location = 0) in vec3 a_position;       \n\
+layout(location = 1) in vec2 a_texcoord;       \n\
+out vec2 v_texcoord;                           \n\
+                                               \n\
+void main()                                    \n\
+{                                              \n\
+        gl_Position.xyz = a_position;          \n\
+        gl_Position.w = 1;                     \n\
+        v_texcoord = a_texcoord;               \n\
+}                                              \n\
+";
+
+
+static const char *yuyv_to_rgb_fshader = "       \
+#version 330 core                              \n\
+                                               \n\
+uniform float outWidth;                        \n\
+uniform float oneOverInX;                      \n\
+                                               \n\
+uniform int color709;                          \n\
+uniform sampler2D Ytex;                        \n\
+                                               \n\
+in vec2 v_texcoord;                            \n\
+layout (location = 0) out vec4 fragColor;      \n\
+                                               \n\
+vec3 yuv_to_rgb (vec3 val, mat3 coff_yuv) {    \n\
+    vec3 rgb;                                  \n\
+    val += vec3(-0.0625, -0.5, -0.5);          \n\
+    rgb.r = dot(val, coff_yuv[0]);             \n\
+    rgb.g = dot(val, coff_yuv[1]);             \n\
+    rgb.b = dot(val, coff_yuv[2]);             \n\
+    return rgb;                                \n\
+}                                              \n\
+                                               \n\
+void main (void) {                             \n\
+    mat3 m_709 = mat3(                         \n\
+        // first column                        \n\
+        1.164,  0.000,  1.787,                 \n\
+        // second column                       \n\
+        1.164, -0.213, -0.531,                 \n\
+        // third column                        \n\
+        1.164,  2.112,  0.000                  \n\
+    );                                         \n\
+    mat3 m_601 = mat3(                         \n\
+        // first column                        \n\
+        1.164,  0.000,  1.596,                 \n\
+        // second column                       \n\
+        1.164, -0.391, -0.813,                 \n\
+        // third column                        \n\
+        1.164,  2.018,  0.000                  \n\
+    );                                         \n\
+    vec4 rgba, uv_texel;                       \n\
+    vec3 yuv;                                  \n\
+    float dx1 = -oneOverInX;                   \n\
+    float dx2 = 0.0;                           \n\
+    //Yn                                       \n\
+    yuv.x = texture(Ytex, v_texcoord).r;       \n\
+    float inorder =                            \n\
+        mod (v_texcoord.x * outWidth, 2.0);    \n\
+    if (inorder < 1.0) {                       \n\
+        dx2 = -dx1;                            \n\
+        dx1 = 0.0;                             \n\
+    }                                          \n\
+    //Y0U0, Y2U2                               \n\
+    uv_texel.rg = texture(                     \n\
+        Ytex, v_texcoord + vec2(dx1, 0.0)).rg; \n\
+    //Y1V0, Y3V2                               \n\
+    uv_texel.ba = texture(                     \n\
+        Ytex, v_texcoord + vec2(dx2, 0.0)).rg; \n\
+    //U0V0, U2V2                               \n\
+    yuv.yz = uv_texel.ga;                      \n\
+    if( color709!=0 )                          \n\
+        rgba.rgb = yuv_to_rgb(yuv, m_709);     \n\
+    else                                       \n\
+        rgba.rgb = yuv_to_rgb(yuv, m_601);     \n\
+    rgba.a = 1.0;                              \n\
+    fragColor = vec4(                          \n\
+        rgba.r,rgba.g,rgba.b,rgba.a);          \n\
+}                                              \n\
+";
+
 static const char *g_vars[] = {
 	  "outWidth"
 	, "oneOverInX"
@@ -41,7 +125,8 @@ public:
 		, m_inWidth(inW)
 		, m_inHeight(inH)
 		, m_outWidth(outW)
-		, m_outHeight(outH){
+		, m_outHeight(outH)
+		{
 		memset(m_varId, 0, sizeof(m_varId));
 	}
 	~cYUYV2RGBA() {
@@ -56,7 +141,10 @@ public:
 			DBG(0, "output dimension error\n");
 			return 0;
 		}
-		load((char *)"/opt/.gh/ogl/common/yuyv_to_rgba");
+		load( (   char *)"yuyv_to_rgba"
+			, yuyv_to_rgb_vshader
+			, yuyv_to_rgb_fshader
+		);
 		const GLfloat vertex[6][3] = {
 			{ -1.0f, -1.0f, 0.0f }, /* BL */
 			{  1.0f, -1.0f, 0.0f }, /* BR */

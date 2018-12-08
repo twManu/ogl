@@ -116,6 +116,11 @@ public:
 		}
 	}
 	void setDebug(int level) { m_dbgLevel = level; }
+	void load(char *fileName, const char *vsh, const char *fsh) {
+		m_progName = fileName;
+		addProg(GL_VERTEX_SHADER, (char *)vsh);
+		addProg(GL_FRAGMENT_SHADER, (char *)fsh);
+	}
 	void load(char *fileName) {
 		const char* fileExt[] = {".fsh",".vsh"};
 		static unsigned int shaderType[] = {GL_FRAGMENT_SHADER, GL_VERTEX_SHADER};

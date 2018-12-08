@@ -87,6 +87,59 @@ void main (void) {                             \n\
 }                                              \n\
 ";
 
+#if 0
+//output vertex is y vertex, and also coordinate
+in vec4 a_position; 
+in vec2 a_texcoord;
+out vec2 v_texcoord;
+void main()
+{
+  gl_Position = a_position;
+  v_texcoord = a_texcoord;
+}
+
+//scale0 1:1, scale1 1:2
+uniform vec2 tex_scale0;
+uniform vec2 tex_scale1;
+uniform vec2 tex_scale2;
+uniform float width;
+uniform float height;
+uniform float poffset_x;
+uniform float poffset_y;
+uniform vec3 offset;
+uniform vec3 coeff1;
+uniform vec3 coeff2;
+uniform vec3 coeff3;
+uniform sampler2D Ytex, UVtex;
+
+out vec4 fragColor;
+
+vec3 yuv_to_rgb (vec3 val, vec3 offset, vec3 ycoeff, vec3 ucoeff, vec3 vcoeff) {
+  vec3 rgb;
+  val += offset;
+  rgb.r = dot(val, ycoeff);
+  rgb.g = dot(val, ucoeff);
+  rgb.b = dot(val, vcoeff);
+  return rgb;
+}
+
+
+in vec2 v_texcoord;
+void main (void) {
+vec2 texcoord;
+texcoord = v_texcoord;
+vec4 rgba;
+vec3 yuv;
+yuv.x=texture(Ytex, texcoord * tex_scale0).r;
+yuv.yz=texture(UVtex, texcoord * tex_scale1).rg;
+rgba.rgb = yuv_to_rgb (yuv, offset, coeff1, coeff2, coeff3);
+rgba.a = 1.0;
+fragColor=vec4(rgba.r,rgba.g,rgba.b,rgba.a);
+
+}
+
+#endif
+
 static const char *g_vars[] = {
 	  "outWidth"
 	, "oneOverInX"

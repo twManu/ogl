@@ -1,3 +1,6 @@
+/*
+ *  1:1 color convert
+ */
 #ifndef __YUYV_TO_RGBA_H__
 #define __YUYV_TO_RGBA_H__
 
@@ -22,8 +25,7 @@ void main()                                    \n\
 static const char *yuyv_to_rgb_fshader = "       \
 #version 330 core                              \n\
                                                \n\
-uniform float outWidth;                        \n\
-uniform float oneOverInX;                      \n\
+uniform float inWidth;                         \n\
                                                \n\
 uniform int color709;                          \n\
 uniform sampler2D Ytex;                        \n\
@@ -59,12 +61,12 @@ void main (void) {                             \n\
     );                                         \n\
     vec4 rgba, uv_texel;                       \n\
     vec3 yuv;                                  \n\
-    float dx1 = -oneOverInX;                   \n\
+    float dx1 = -1/inWidth;                    \n\
     float dx2 = 0.0;                           \n\
     //Yn                                       \n\
     yuv.x = texture(Ytex, v_texcoord).r;       \n\
     float inorder =                            \n\
-        mod (v_texcoord.x * outWidth, 2.0);    \n\
+        mod (v_texcoord.x * inWidth, 2.0);     \n\
     if (inorder < 1.0) {                       \n\
         dx2 = -dx1;                            \n\
         dx1 = 0.0;                             \n\
@@ -87,64 +89,66 @@ void main (void) {                             \n\
 }                                              \n\
 ";
 
-#if 0
-//output vertex is y vertex, and also coordinate
-in vec4 a_position; 
-in vec2 a_texcoord;
-out vec2 v_texcoord;
-void main()
-{
-  gl_Position = a_position;
-  v_texcoord = a_texcoord;
-}
 
-//scale0 1:1, scale1 1:2
-uniform vec2 tex_scale0;
-uniform vec2 tex_scale1;
-uniform vec2 tex_scale2;
-uniform float width;
-uniform float height;
-uniform float poffset_x;
-uniform float poffset_y;
-uniform vec3 offset;
-uniform vec3 coeff1;
-uniform vec3 coeff2;
-uniform vec3 coeff3;
-uniform sampler2D Ytex, UVtex;
+static const char *nv12_to_rgb_fshader = "       \
+#version 330 core                              \n\
+                                               \n\
+uniform float inWidth;                         \n\
+                                               \n\
+uniform int color709;                          \n\
+uniform sampler2D Ytex;                        \n\
+uniform sampler2D Utex;                        \n\
+                                               \n\
+in vec2 v_texcoord;                            \n\
+layout (location = 0) out vec4 fragColor;      \n\
+                                               \n\
+vec3 yuv_to_rgb (vec3 val, mat3 coff_yuv) {    \n\
+    vec3 rgb;                                  \n\
+    val += vec3(-0.0625, -0.5, -0.5);          \n\
+    rgb.r = dot(val, coff_yuv[0]);             \n\
+    rgb.g = dot(val, coff_yuv[1]);             \n\
+    rgb.b = dot(val, coff_yuv[2]);             \n\
+    return rgb;                                \n\
+}                                              \n\
+                                               \n\
+void main (void) {                             \n\
+    mat3 m_709 = mat3(                         \n\
+        // first column                        \n\
+        1.164,  0.000,  1.787,                 \n\
+        // second column                       \n\
+        1.164, -0.213, -0.531,                 \n\
+        // third column                        \n\
+        1.164,  2.112,  0.000                  \n\
+    );                                         \n\
+    mat3 m_601 = mat3(                         \n\
+        // first column                        \n\
+        1.164,  0.000,  1.596,                 \n\
+        // second column                       \n\
+        1.164, -0.391, -0.813,                 \n\
+        // third column                        \n\
+        1.164,  2.018,  0.000                  \n\
+    );                                         \n\
+    vec4 rgba, uv_texel;                       \n\
+    vec3 yuv;                                  \n\
+    //Yn                                       \n\
+    yuv.x = texture(Ytex, v_texcoord).r;       \n\
+    yuv.yz = texture(Utex, v_texcoord*0.5).rg; \n\
+    if( color709!=0 )                          \n\
+        rgba.rgb = yuv_to_rgb(yuv, m_709);     \n\
+    else                                       \n\
+        rgba.rgb = yuv_to_rgb(yuv, m_601);     \n\
+    rgba.a = 1.0;                              \n\
+    fragColor = vec4(                          \n\
+        rgba.r,rgba.g,rgba.b,rgba.a);          \n\
+}                                              \n\
+";
 
-out vec4 fragColor;
-
-vec3 yuv_to_rgb (vec3 val, vec3 offset, vec3 ycoeff, vec3 ucoeff, vec3 vcoeff) {
-  vec3 rgb;
-  val += offset;
-  rgb.r = dot(val, ycoeff);
-  rgb.g = dot(val, ucoeff);
-  rgb.b = dot(val, vcoeff);
-  return rgb;
-}
-
-
-in vec2 v_texcoord;
-void main (void) {
-vec2 texcoord;
-texcoord = v_texcoord;
-vec4 rgba;
-vec3 yuv;
-yuv.x=texture(Ytex, texcoord * tex_scale0).r;
-yuv.yz=texture(UVtex, texcoord * tex_scale1).rg;
-rgba.rgb = yuv_to_rgb (yuv, offset, coeff1, coeff2, coeff3);
-rgba.a = 1.0;
-fragColor=vec4(rgba.r,rgba.g,rgba.b,rgba.a);
-
-}
-
-#endif
 
 static const char *g_vars[] = {
-	  "outWidth"
-	, "oneOverInX"
+	  "inWidth"
 	, "color709"
 	, "Ytex"
+	, "Utex"            //NV12 use while YUYV not
 };
 
 class cYUYV2RGBA : public Shader {
@@ -152,8 +156,6 @@ protected:
 	GLuint               m_inTexture;
 	int                  m_inWidth;
 	int                  m_inHeight;
-	int                  m_outWidth;
-	int                  m_outHeight;
 	//shader var
 	GLuint               m_varId[10];
 	GLuint               m_vao;
@@ -167,18 +169,16 @@ protected:
 public:
 	//index of shader var
 	enum {
-		  OUT_WIDTH
-		, ONE_OVER_INx
+		  IN_WIDTH
 		, COLOR709
 		, Y_TEX
+		, U_TEX
 	};
-	cYUYV2RGBA(int inW, int inH, int outW, int outH)
+	cYUYV2RGBA(int inW, int inH)
 		: Shader()
 		, m_inTexture(0)
 		, m_inWidth(inW)
 		, m_inHeight(inH)
-		, m_outWidth(outW)
-		, m_outHeight(outH)
 		{
 		memset(m_varId, 0, sizeof(m_varId));
 	}
@@ -188,10 +188,6 @@ public:
 	int Init(bool linear=1) {
 		if( !m_inWidth || !m_inHeight ) {
 			DBG(0, "input dimension error\n");
-			return 0;
-		}
-		if( !m_outWidth || !m_outHeight ) {
-			DBG(0, "output dimension error\n");
 			return 0;
 		}
 		load( (   char *)"yuyv_to_rgba"
@@ -287,8 +283,7 @@ public:
 	}
 	int Apply(const GLvoid *buf=NULL, int is709=1) {
 		use();
-		glUniform1f(m_varId[OUT_WIDTH], (GLfloat) m_outWidth);
-                glUniform1f(m_varId[ONE_OVER_INx], 1.0/m_inWidth);
+		glUniform1f(m_varId[IN_WIDTH], (GLfloat) m_inWidth);
 		//color
 		glUniform1i(m_varId[COLOR709], is709);
 		//texture

@@ -194,7 +194,7 @@ int main( void )
 
     // But on MacOS X with a retina screen it'll be 1024*2 and 768*2, so we get the actual framebuffer size:
     glfwGetFramebufferSize(window, &windowWidth, &windowHeight);
-    cYUYV2RGBA yuv2rgb(V4L2_WIDTH, V4L2_HEIGHT, windowWidth, windowHeight);
+    cYUYV2RGBA yuv2rgb(V4L2_WIDTH, V4L2_HEIGHT);
 
 	// Initialize GLEW
 	glewExperimental = true; // Needed for core profile

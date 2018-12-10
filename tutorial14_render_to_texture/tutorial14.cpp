@@ -49,6 +49,9 @@ baseGL g_baseGL;
 static char *dev_name;
 static v4l2_base *v4l2base;
 #define V4L2_BUF_COUNT       6
+#define CAP_FORMAT         V4L2_PIX_FMT_YUYV
+//#define CAP_FORMAT         V4L2_PIX_FMT_NV12
+
 static struct buffer buffers[V4L2_BUF_COUNT];
 static pthread_t v4l2_th;
 static int g_stop = 0;
@@ -78,7 +81,7 @@ int nInitV4l2()
     memset(&buffers, 0, sizeof(buffers));
     v4l2setting.width = V4L2_WIDTH;
     v4l2setting.height = V4L2_HEIGHT;
-    v4l2setting.format = V4L2_PIX_FMT_YUYV;
+    v4l2setting.format = CAP_FORMAT;
     v4l2setting.io = IO_MEMORY_USERPTR;
     if (v4l2_init(v4l2base, &v4l2setting) < 0)
         return -1;
@@ -161,6 +164,7 @@ void finiV4l2()
 }
 //v4l2
 
+
 int main( void )
 {
 
@@ -194,7 +198,8 @@ int main( void )
 
     // But on MacOS X with a retina screen it'll be 1024*2 and 768*2, so we get the actual framebuffer size:
     glfwGetFramebufferSize(window, &windowWidth, &windowHeight);
-    cYUYV2RGBA yuv2rgb(V4L2_WIDTH, V4L2_HEIGHT);
+    cYUYV2RGBA yuv2rgb(V4L2_WIDTH, V4L2_HEIGHT,
+	V4L2_PIX_FMT_YUYV==CAP_FORMAT?FMT_YUYV:FMT_NV12);
 
 	// Initialize GLEW
 	glewExperimental = true; // Needed for core profile
@@ -266,7 +271,7 @@ int main( void )
 	cSaveScrn save_screen;
 #endif
 	
-	void *curBuf=NULL;
+	unsigned char *curBuf=NULL;
 	do{
 		int index;
 		// Render to our framebuffer
@@ -328,10 +333,12 @@ int main( void )
 		if( g_use.size() ) {
 			index = *(g_use.begin());
 			g_use.pop_front();
-			curBuf=buffers[index].start;
+			curBuf=(unsigned char *)buffers[index].start;
 		}
 		pthread_mutex_unlock(&g_useLock);
-		if( curBuf ) yuv2rgb.Apply(curBuf); //update when ever got
+		//update when ever got
+		if( curBuf )
+			yuv2rgb.Apply(curBuf, V4L2_PIX_FMT_YUYV==CAP_FORMAT?NULL:curBuf+V4L2_WIDTH*V4L2_HEIGHT);
 		if( index>=0 ) {
 			pthread_mutex_lock(&g_freeLock);
 			g_free.push_back(index);

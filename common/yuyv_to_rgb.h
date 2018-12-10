@@ -128,11 +128,11 @@ void main (void) {                             \n\
         // third column                        \n\
         1.164,  2.018,  0.000                  \n\
     );                                         \n\
-    vec4 rgba, uv_texel;                       \n\
+    vec4 rgba;                                 \n\
     vec3 yuv;                                  \n\
     //Yn                                       \n\
     yuv.x = texture(Ytex, v_texcoord).r;       \n\
-    yuv.yz = texture(Utex, v_texcoord*0.5).rg; \n\
+    yuv.yz = texture(Utex, v_texcoord).rg;     \n\
     if( color709!=0 )                          \n\
         rgba.rgb = yuv_to_rgb(yuv, m_709);     \n\
     else                                       \n\
@@ -160,7 +160,7 @@ typedef enum {
 
 class cYUYV2RGBA : public Shader {
 protected:
-	GLuint               m_inTexture[3];
+
 	int                  m_inWidth;
 	int                  m_inHeight;
 	//shader var
@@ -171,8 +171,19 @@ protected:
 		, ATTR_1_TEXCOORD
 		, ATTR_END
 	};
+	typedef struct fmtDesc {
+		GLuint           texIndex;
+		int              width;
+		int              height;
+		GLuint           fmt;
+		GLuint           size;
+		int              uniformIndex;
+	} fmtDesc;
+	fmtDesc              m_fmtDesc[3];
+	GLuint               m_inTexture[3];
 	GLuint               m_vbo[ATTR_END];
 	eYUV_Fmt             m_pixfmt;
+	int                  m_texCount;
 
 public:
 	//index of shader var
@@ -184,42 +195,56 @@ public:
 	};
 	cYUYV2RGBA(int inW, int inH, eYUV_Fmt fmt=FMT_YUYV)
 		: Shader()
-		
 		, m_inWidth(inW)
 		, m_inHeight(inH)
-		, m_pixfmt(fmt) {
+		, m_pixfmt(fmt)
+		, m_texCount(0) {
 		memset(m_inTexture, 0, sizeof(m_inTexture));
 		memset(m_varId, 0, sizeof(m_varId));
 	}
 	~cYUYV2RGBA() {
 		if( m_inTexture )
-			glDeleteTextures(sizeof(m_inTexture)/sizeof(m_inTexture[0]), m_inTexture);
+			glDeleteTextures(m_texCount, m_inTexture);
 	}
 	int Init(bool linear=1) {
-		int texCount = 0;
-		GLenum texFormat[3] = { 0, 0, 0 };
 		if( !m_inWidth || !m_inHeight ) {
 			DBG(0, "input dimension error\n");
 			return 0;
 		}
 		switch ( m_pixfmt ) {
 		case FMT_NV12:
-			texFormat[0] = GL_RED;
-			texFormat[1] = GL_RG;
+			m_texCount = 2;
+			m_fmtDesc[0].texIndex = GL_TEXTURE0;
+			m_fmtDesc[0].fmt = GL_RED;
+			m_fmtDesc[0].width = m_inWidth;
+			m_fmtDesc[0].height = m_inHeight;
+			m_fmtDesc[0].size = GL_UNSIGNED_BYTE;
+			m_fmtDesc[0].uniformIndex = Y_TEX;
+
+			m_fmtDesc[1].texIndex = GL_TEXTURE1;
+			m_fmtDesc[1].fmt = GL_RG;
+			m_fmtDesc[1].width = m_inWidth/2;
+			m_fmtDesc[1].height = m_inHeight/2;
+			m_fmtDesc[1].size = GL_UNSIGNED_BYTE;
+			m_fmtDesc[1].uniformIndex = U_TEX;
 			load( (char *)"nv12_to_rgba"
 				, yuyv_to_rgb_vshader
 				, nv12_to_rgb_fshader
 			);
-			texCount = 2;
 			break;
 
 		case FMT_YUYV:
-			texFormat[0] = GL_RG;
+			m_texCount = 1;
+			m_fmtDesc[0].texIndex = GL_TEXTURE0;
+			m_fmtDesc[0].fmt = GL_RG;
+			m_fmtDesc[0].width = m_inWidth;
+			m_fmtDesc[0].height = m_inHeight;
+			m_fmtDesc[0].size = GL_UNSIGNED_BYTE;
+			m_fmtDesc[0].uniformIndex = Y_TEX;
 			load( (char *)"yuyv_to_rgba"
 				, yuyv_to_rgb_vshader
 				, yuyv_to_rgb_fshader
 			);
-			texCount = 1;
 			break;
 		default:
 			DBG(0, "unknow yuv format\n");
@@ -285,12 +310,20 @@ public:
 		for( int i=0; i<sizeof(g_vars)/sizeof(g_vars[0]); ++i )
 			m_varId[i] = glGetUniformLocation(prog, g_vars[i]);
 		//texture prepare
-		glGenTextures(sizeof(m_inTexture)/sizeof(m_inTexture[0]), m_inTexture);
-		for( int i=0; i<texCount; ++i ) {
+		glGenTextures(m_texCount, m_inTexture);
+		for( int i=0; i<m_texCount; ++i ) {
 			// "Bind" the newly created texture : all future texture functions will modify this texture
 			glBindTexture(GL_TEXTURE_2D, m_inTexture[i]);
 			// Give an empty image to OpenGL ( the last "0" means "empty" )
-			glTexImage2D(GL_TEXTURE_2D, 0, texFormat[i], m_inWidth, m_inHeight, 0, texFormat[i], GL_UNSIGNED_BYTE, 0);
+			glTexImage2D(GL_TEXTURE_2D
+					,0
+					, m_fmtDesc[i].fmt
+					, m_fmtDesc[i].width
+					, m_fmtDesc[i].height
+					, 0
+					, m_fmtDesc[i].fmt
+					, m_fmtDesc[i].size
+					, 0);
 			// Poor filtering
 			if( linear ) {
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -319,24 +352,21 @@ public:
 		glVertexAttribPointer(ATTR_1_TEXCOORD, 2, GL_FLOAT, GL_FALSE, 0, 0);
 
 		//texture
-		switch( m_pixfmt ) {
-		case FMT_YUYV:
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, m_inTexture[0]);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RG, m_inWidth, m_inHeight, 0, GL_RG, GL_UNSIGNED_BYTE, buf);
-			glUniform1i(m_varId[Y_TEX], 0);
-			break;
-		case FMT_NV12:
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, m_inTexture[0]);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, m_inWidth, m_inHeight, 0, GL_RED, GL_UNSIGNED_BYTE, buf);
-			glUniform1i(m_varId[Y_TEX], 0);
-			glActiveTexture(GL_TEXTURE1);
-			glBindTexture(GL_TEXTURE_2D, m_inTexture[1]);
-			glTexImage2D(GL_TEXTURE_2D, 0, GL_RG, m_inWidth/2, m_inHeight/2, 0, GL_RG, GL_UNSIGNED_BYTE, buf2);
-			glUniform1i(m_varId[U_TEX], 1);
-			break;
+		for( int i=0; i<m_texCount; ++i ) {
+			glActiveTexture(m_fmtDesc[i].texIndex);
+			glBindTexture(GL_TEXTURE_2D, m_inTexture[i]);
+			glTexImage2D(GL_TEXTURE_2D
+					,0
+					, m_fmtDesc[i].fmt
+					, m_fmtDesc[i].width
+					, m_fmtDesc[i].height
+					, 0
+					, m_fmtDesc[i].fmt
+					, m_fmtDesc[i].size
+					, 0==i?buf:buf2);
+			glUniform1i(m_varId[m_fmtDesc[i].uniformIndex], i);
 		}
+
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 
 		glDisableVertexAttribArray(0);

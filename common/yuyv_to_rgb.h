@@ -26,7 +26,7 @@ static const char *yuyv_to_rgb_fshader = "       \
 #version 330 core                              \n\
                                                \n\
 uniform float inWidth;                         \n\
-                                               \n\
+uniform float maskOutOff;                      \n\
 uniform int color709;                          \n\
 uniform sampler2D Ytex;                        \n\
                                                \n\
@@ -63,30 +63,35 @@ void main (void) {                             \n\
     vec3 yuv;                                  \n\
     float dx1 = -1/inWidth;                    \n\
     float dx2 = 0.0;                           \n\
-    //Yn                                       \n\
-    yuv.x = texture(Ytex, v_texcoord).r;       \n\
-    float inorder =                            \n\
-        mod (v_texcoord.x * inWidth, 2.0);     \n\
-    if (inorder < 1.0) {                       \n\
-        dx2 = -dx1;                            \n\
-        dx1 = 0.0;                             \n\
-    }                                          \n\
-    //Y0U0, Y2U2                               \n\
-    uv_texel.rg = texture(                     \n\
-        Ytex, v_texcoord + vec2(dx1, 0.0)).rg; \n\
-    //Y1V0, Y3V2                               \n\
-    uv_texel.ba = texture(                     \n\
-        Ytex, v_texcoord + vec2(dx2, 0.0)).rg; \n\
-    //U0V0, U2V2                               \n\
-    yuv.yz = uv_texel.ga;                      \n\
-    if( color709!=0 )                          \n\
-        rgba.rgb = yuv_to_rgb(yuv, m_709);     \n\
-    else                                       \n\
-        rgba.rgb = yuv_to_rgb(yuv, m_601);     \n\
-    rgba.a = 1.0;                              \n\
-    fragColor = vec4(                          \n\
-        rgba.r,rgba.g,rgba.b,rgba.a);          \n\
-}                                              \n\
+    if( maskOutOff<=distance(vec2(0), vec2(0.5)) &&\n\
+        distance(v_texcoord, vec2(0.5))        \n\
+        >maskOutOff ) fragColor=vec4(0,0,0,1); \n\
+    else {                                     \n\
+        //Yn                                   \n\
+        yuv.x = texture(Ytex, v_texcoord).r;   \n\
+        float inorder =                        \n\
+            mod (v_texcoord.x * inWidth, 2.0); \n\
+        if (inorder < 1.0) {                       \n\
+            dx2 = -dx1;                            \n\
+            dx1 = 0.0;                             \n\
+        }                                          \n\
+        //Y0U0, Y2U2                               \n\
+        uv_texel.rg = texture(                     \n\
+            Ytex, v_texcoord + vec2(dx1, 0.0)).rg; \n\
+        //Y1V0, Y3V2                               \n\
+        uv_texel.ba = texture(                     \n\
+            Ytex, v_texcoord + vec2(dx2, 0.0)).rg; \n\
+        //U0V0, U2V2                               \n\
+        yuv.yz = uv_texel.ga;                      \n\
+        if( color709!=0 )                          \n\
+            rgba.rgb = yuv_to_rgb(yuv, m_709);     \n\
+        else                                       \n\
+            rgba.rgb = yuv_to_rgb(yuv, m_601);     \n\
+        rgba.a = 1.0;                              \n\
+        fragColor = vec4(                          \n\
+            rgba.r,rgba.g,rgba.b,rgba.a);          \n\
+    }                                              \n\
+}                                                  \n\
 ";
 
 
@@ -94,7 +99,7 @@ static const char *nv12_to_rgb_fshader = "       \
 #version 330 core                              \n\
                                                \n\
 uniform float inWidth;                         \n\
-                                               \n\
+uniform float maskOutOff;                      \n\
 uniform int color709;                          \n\
 uniform sampler2D Ytex;                        \n\
 uniform sampler2D Utex;                        \n\
@@ -130,22 +135,28 @@ void main (void) {                             \n\
     );                                         \n\
     vec4 rgba;                                 \n\
     vec3 yuv;                                  \n\
-    //Yn                                       \n\
-    yuv.x = texture(Ytex, v_texcoord).r;       \n\
-    yuv.yz = texture(Utex, v_texcoord).rg;     \n\
-    if( color709!=0 )                          \n\
-        rgba.rgb = yuv_to_rgb(yuv, m_709);     \n\
-    else                                       \n\
-        rgba.rgb = yuv_to_rgb(yuv, m_601);     \n\
-    rgba.a = 1.0;                              \n\
-    fragColor = vec4(                          \n\
-        rgba.r,rgba.g,rgba.b,rgba.a);          \n\
+    if( maskOutOff<=distance(vec2(0), vec2(0.5)) &&\n\
+        distance(v_texcoord, vec2(0.5))        \n\
+        >maskOutOff ) fragColor=vec4(0,0,0,1); \n\
+    else {                                     \n\
+        //Yn                                       \n\
+        yuv.x = texture(Ytex, v_texcoord).r;       \n\
+        yuv.yz = texture(Utex, v_texcoord).rg;     \n\
+        if( color709!=0 )                          \n\
+            rgba.rgb = yuv_to_rgb(yuv, m_709);     \n\
+        else                                       \n\
+            rgba.rgb = yuv_to_rgb(yuv, m_601);     \n\
+        rgba.a = 1.0;                              \n\
+        fragColor = vec4(                          \n\
+            rgba.r,rgba.g,rgba.b,rgba.a);          \n\
+    }                                              \n\
 }                                              \n\
 ";
 
 
 static const char *g_vars[] = {
 	  "inWidth"
+	, "maskOutOff"
 	, "color709"
 	, "Ytex"
 	, "Utex"            //NV12 use while YUYV not
@@ -189,6 +200,7 @@ public:
 	//index of shader var
 	enum {
 		  IN_WIDTH
+		, MASK_OUT_OFF
 		, COLOR709
 		, Y_TEX
 		, U_TEX
@@ -337,9 +349,10 @@ public:
 		}
 		return 1;
 	}
-	int Apply(const GLvoid *buf=NULL, const GLvoid *buf2=NULL, int is709=1) {
+	int Apply(const GLvoid *buf=NULL, const GLvoid *buf2=NULL, float maskOut=1.0, int is709=1) {
 		use();
 		glUniform1f(m_varId[IN_WIDTH], (GLfloat) m_inWidth);
+		glUniform1f(m_varId[MASK_OUT_OFF], maskOut);
 		//color
 		glUniform1i(m_varId[COLOR709], is709);
 		//vertex

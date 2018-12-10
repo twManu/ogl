@@ -371,9 +371,14 @@ int main(int argc, char *argv[] )
 			curBuf=(unsigned char *)buffers[index].start;
 		}
 		pthread_mutex_unlock(&g_useLock);
+#if 0
+		float ratio = ((float) (nbFrames % 60))/60;
+#else
+		float ratio = 1;
+#endif
 		//update when ever got
 		if( curBuf )
-			yuv2rgb.Apply(curBuf, (FMT_NV12==g_fmt) ? (curBuf+g_width*g_height): NULL);
+			yuv2rgb.Apply(curBuf, (FMT_NV12==g_fmt) ? (curBuf+g_width*g_height): NULL, ratio);
 		if( index>=0 ) {
 			pthread_mutex_lock(&g_freeLock);
 			g_free.push_back(index);

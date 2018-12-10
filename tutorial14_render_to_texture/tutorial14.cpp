@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <vector>
+#include <getopt.h>
 
 // Include GLEW
 #include <GL/glew.h>
@@ -22,16 +23,10 @@ using namespace glm;
 #include "v4l2_base.h"
 #include "v4l2_base.cc"
 
-//failure
-#if 0
-#define  V4L2_WIDTH   1280
-#define  V4L2_HEIGHT   720
-#else
-#define  V4L2_WIDTH   1920
-#define  V4L2_HEIGHT  1080
-#endif
-#define  WIDTH  1920
-#define  HEIGHT 1080
+static int g_width = 1920;
+static int g_height = 1080;
+static int g_devNr = 0;
+static eYUV_Fmt g_fmt = FMT_YUYV;
 
 #include <common/shader.hpp>
 #include <common/texture.hpp>
@@ -61,6 +56,43 @@ pthread_mutex_t g_useLock = PTHREAD_MUTEX_INITIALIZER;
 std::list<int>       g_free;
 std::list<int>       g_use;
 
+
+static void checkParm(int argc, char *argv[])
+{
+	int opt;
+
+	while( (opt = getopt(argc, argv, "hW:H:f:")) != -1) {
+		switch(opt) {
+		case 'W':
+			g_width = atoi(optarg);
+			break;
+		case 'H':
+			g_height = atoi(optarg);
+			break;
+		case 'f':
+			g_fmt = (eYUV_Fmt)atoi(optarg);
+			break;
+		case 'n':
+			g_devNr = atoi(optarg);
+			break;
+		case 'h':
+			printf("Usage: tutorial14 [-W WIDTH] [-H HEIGHT] [-f FMT] [-n DEV_NR]\n");
+			printf("\t -W WIDTH           source width, default=1920\n");
+			printf("\t -H HEIGHT          source height, default=1080\n");
+			printf("\t -n DEV_NR          device number, default=0 (/dev/video0)\n");
+			printf("\t -f FMT             source format, default=YUYV\n");
+			printf("\t          0   NV12\n");
+			printf("\t          1   YUYV\n");
+			abort();
+			break;
+		default:
+			printf("unknown option");
+			abort();
+			break;
+		}
+	}
+}
+
 void *v4l2_proc(void *dummy);
 
 int nInitV4l2()
@@ -70,7 +102,9 @@ int nInitV4l2()
     int fcnt = 0;
     int i;
     
-    dev_name = (char *)"/dev/video0";
+    char dev_name[3];
+
+    sprintf(dev_name, "/dev/video%d", g_devNr);
 
     v4l2base = v4l2_open(dev_name);
     if (!v4l2base) {
@@ -79,9 +113,9 @@ int nInitV4l2()
     
     memset(&v4l2setting, 0, sizeof(v4l2setting));
     memset(&buffers, 0, sizeof(buffers));
-    v4l2setting.width = V4L2_WIDTH;
-    v4l2setting.height = V4L2_HEIGHT;
-    v4l2setting.format = CAP_FORMAT;
+    v4l2setting.width = g_width;
+    v4l2setting.height = g_height;
+    v4l2setting.format = (FMT_YUYV==g_fmt) ? V4L2_PIX_FMT_YUYV : V4L2_PIX_FMT_NV12;
     v4l2setting.io = IO_MEMORY_USERPTR;
     if (v4l2_init(v4l2base, &v4l2setting) < 0)
         return -1;
@@ -89,9 +123,13 @@ int nInitV4l2()
     //alloc buffer
     for (i = 0; i < nbuf; ++i) {
         buffers[i].index = i;
-        buffers[i].length = v4l2setting.width*v4l2setting.height*2;
 	//YUYV
-        buffers[i].start = malloc(v4l2setting.width*v4l2setting.height*2);
+        buffers[i].length = v4l2setting.width*v4l2setting.height*2;
+        buffers[i].start = malloc(buffers[i].length);
+	if( !buffers[i].start ) {
+		printf("fail to allocate buffer\n");
+		return -1;
+	}
     }
     
     if (v4l2_req_buf(v4l2base, &nbuf, buffers) < 0)
@@ -165,9 +203,9 @@ void finiV4l2()
 //v4l2
 
 
-int main( void )
+int main(int argc, char *argv[] )
 {
-
+	checkParm(argc, argv);
 	// Initialise GLFW
 	if( !glfwInit() )
 	{
@@ -183,7 +221,7 @@ int main( void )
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
 	// Open a window and create its OpenGL context
-	window = glfwCreateWindow( WIDTH, HEIGHT, "Tutorial 14 - Render To Texture", NULL, NULL);
+	window = glfwCreateWindow( g_width, g_height, "Tutorial 14 - Render To Texture", NULL, NULL);
 	if( window == NULL ){
 		fprintf( stderr, "Failed to open GLFW window. If you have an Intel GPU, they are not 3.3 compatible. Try the 2.1 version of the tutorials.\n" );
 		getchar();
@@ -193,13 +231,12 @@ int main( void )
 	glfwMakeContextCurrent(window);
 	g_baseGL.getInfo();
     // We would expect width and height to be 1024 and 768
-    int windowWidth = WIDTH;
-    int windowHeight = HEIGHT;
+    int windowWidth = g_width;
+    int windowHeight = g_height;
 
     // But on MacOS X with a retina screen it'll be 1024*2 and 768*2, so we get the actual framebuffer size:
     glfwGetFramebufferSize(window, &windowWidth, &windowHeight);
-    cYUYV2RGBA yuv2rgb(V4L2_WIDTH, V4L2_HEIGHT,
-	V4L2_PIX_FMT_YUYV==CAP_FORMAT?FMT_YUYV:FMT_NV12);
+    cYUYV2RGBA yuv2rgb(g_width, g_height, g_fmt);
 
 	// Initialize GLEW
 	glewExperimental = true; // Needed for core profile
@@ -232,7 +269,7 @@ int main( void )
     
     // Set the mouse at the center of the screen
     glfwPollEvents();
-    glfwSetCursorPos(window, WIDTH/2, HEIGHT/2);
+    glfwSetCursorPos(window, g_width/2, g_height/2);
 
 	// Dark blue background
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
@@ -266,7 +303,7 @@ int main( void )
 	double lastTime = glfwGetTime();
 	double msgPeriodS = 3.0;
 #if 1
-	cSaveScrn save_screen(0, windowWidth, windowHeight, (char *)"screen%03d.ppm", 100);
+	cSaveScrn save_screen(0, g_width, g_height, (char *)"screen%03d.ppm", 100);
 #else
 	cSaveScrn save_screen;
 #endif
@@ -338,7 +375,7 @@ int main( void )
 		pthread_mutex_unlock(&g_useLock);
 		//update when ever got
 		if( curBuf )
-			yuv2rgb.Apply(curBuf, V4L2_PIX_FMT_YUYV==CAP_FORMAT?NULL:curBuf+V4L2_WIDTH*V4L2_HEIGHT);
+			yuv2rgb.Apply(curBuf, (FMT_NV12==g_fmt) ? (curBuf+g_width*g_height): NULL);
 		if( index>=0 ) {
 			pthread_mutex_lock(&g_freeLock);
 			g_free.push_back(index);

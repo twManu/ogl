@@ -27,6 +27,7 @@ static int g_width = 1920;
 static int g_height = 1080;
 static int g_devNr = 0;
 static eYUV_Fmt g_fmt = FMT_YUYV;
+static char g_dev_name[30];
 
 #include <common/shader.hpp>
 #include <common/texture.hpp>
@@ -102,11 +103,8 @@ int nInitV4l2()
     int fcnt = 0;
     int i;
     
-    char dev_name[3];
-
-    sprintf(dev_name, "/dev/video%d", g_devNr);
-
-    v4l2base = v4l2_open(dev_name);
+    sprintf(g_dev_name, "/dev/video%d", g_devNr);
+    v4l2base = v4l2_open(g_dev_name);
     if (!v4l2base) {
         return -1;
     }

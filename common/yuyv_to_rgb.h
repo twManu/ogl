@@ -6,11 +6,6 @@
 
 #include "Shader.h"
 
-/* 0.29, 0.29 for GSM 
-   0.455, 0.396 for Green side
-   Blue side
-    if( distance(val.yz, vec2(0.698, 0.337))<0.2 ) \n\
- */
 
 static const char *yuyv_to_rgb_vshader = "       \
 #version 330 core                              \n\
@@ -52,27 +47,34 @@ vec3 yuv_to_rgb (vec3 val, mat3 coff_yuv) {    \n\
 
 
 /*
- * 1st-var = u value
- * 2nd-var = v value
- * 3rd-var = uv-distance
- * 4th-var = y value
- * 5th-var = y-distance
- * 6th-var = r-replace
- * 7th-var = g-replace
- * 8th-var = b-replace
+ * 1st-var = h value
+ * 2nd-var = r-replace
+ * 3rd-var = g-replace
+ * 4th-var = b-replace
  */
-static const char *yuv_2_rgb_mask_fsh = "\
+static const char *yuv_2_hsv_fsh = "\
+vec3 rgb2hsv(vec3 c) {                                                 \n\
+    vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);                   \n\
+    vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));  \n\
+    vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));  \n\
+    float d = q.x - min(q.w, q.y);                                     \n\
+    float e = 1.0e-10;                                                 \n\
+    return                                                             \n\
+     vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x); \n\
+}                                                                      \n\
 vec3 yuv_to_rgb (vec3 val, mat3 coff_yuv) {    \n\
     vec3 rgb;                                  \n\
-    if( distance(val.gb,vec2(%f,%f))<%f &&     \n\
-        distance(val.r,%f)<%f )                \n\
-        return vec3(%f,%f,%f);                 \n\
     val += vec3(-0.0625, -0.5, -0.5);          \n\
     rgb.r = dot(val, coff_yuv[0]);             \n\
     rgb.g = dot(val, coff_yuv[1]);             \n\
     rgb.b = dot(val, coff_yuv[2]);             \n\
+    vec3 hsv = rgb2hsv(rgb);                   \n\
+    if( distance(hsv.r, %f)<0.3 &&             \n\
+        distance(hsv.g, %f)<0.2 )              \n\
+        return vec3(%f, %f, %f);               \n\
     return rgb;                                \n\
 }";
+
 
 static const char *yuyv_main_fsh = "\
 void main (void) {                             \n\
@@ -252,21 +254,18 @@ public:
 		char *maskBuf=NULL;
 		for( i=len=0; i<count; ++i ) {
 			if( 1==i && mask_param ) {  //todo hardcoding
-				int maskLen=strlen(yuv_2_rgb_mask_fsh) + 8*6 + 2;
+				int maskLen=strlen(yuv_2_hsv_fsh) + 4*10 + 2;
 				maskBuf = (char*) malloc(maskLen);
 				if( !maskBuf ) {
 					DBG(0, "fail to allocate mask buffer\n");
 					return NULL;
 				}
-				sprintf(maskBuf, yuv_2_rgb_mask_fsh\
+				sprintf(maskBuf, yuv_2_hsv_fsh\
 					,mask_param[0]
 					,mask_param[1]
 					,mask_param[2]
 					,mask_param[3]
-					,mask_param[4]
-					,mask_param[5]
-					,mask_param[6]
-					,mask_param[7]);
+					,mask_param[4]);
 				len += maskLen;
 			} else len += strlen(progs[i])+2;
 		}

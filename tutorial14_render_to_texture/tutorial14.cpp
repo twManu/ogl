@@ -39,15 +39,12 @@ static int g_masked = -1;
  * 7th-var = g-replace
  * 8th-var = b-replace
  */
-#define MASK_SIZE          3
-static float g_masks[MASK_SIZE][8] = {
-	//blud
-//	{ 0.698, 0.337, 0.12, 0.0, 1.0, 1.0, 0.0, 0.0 },
-	{ 0.71, 0.34, 0.12, 0.550, 0.12, 1.0, 0.0, 0.0 },
+#define MASK_SIZE          2
+static float g_masks[MASK_SIZE][5] = {
+	//blue
+	{ 0.6667, 0.7, 1.0, 0.0, 0.0 },
 	//green
-	{ 0.4, 0.35, 0.12, 0.57, 0.12, 1.0, 0.0, 0.0 },
-	//gsm
-	{ 0.29, 0.29, 0.2, 0.0, 1.0, 1.0, 0.0, 0.0 }
+	{ 0.3333, 0.7, 1.0, 0.0, 0.0 }
 };
 
 
@@ -100,10 +97,12 @@ static void checkParm(int argc, char *argv[])
 			break;
 		case 'm':
 			g_masked = atoi(optarg);
+#if 1 //mark to test 1-9
 			if( g_masked>=MASK_SIZE ) {
 				printf("invalid mask index\n");
 				g_masked = -1;
 			}
+#endif
 			break;
 		case 'h':
 			printf("Usage: tutorial14 [-W WIDTH] [-H HEIGHT] [-f FMT] [-n DEV_NR] [-m INDEX]\n");
@@ -113,7 +112,7 @@ static void checkParm(int argc, char *argv[])
 			printf("\t -f FMT             source format, default=YUYV\n");
 			printf("\t          0   NV12\n");
 			printf("\t          1   YUYV\n");
-			printf("\t -m INDEX           index param for blue, green, and GSM\n");
+			printf("\t -m INDEX           index param for blue=0, green=1\n");
 			abort();
 			break;
 		default:
@@ -230,6 +229,26 @@ void finiV4l2()
 }
 //v4l2
 
+static void RGB2HSV(float r, float g, float b,
+                    float &h, float &s, float &v)
+{
+    float rgb_max = std::max(r, std::max(g, b));
+    float rgb_min = std::min(r, std::min(g, b));
+    float delta = rgb_max - rgb_min;
+    s = delta / (rgb_max + 1e-20f);
+    v = rgb_max;
+
+    float hue;
+    if (r == rgb_max)
+        hue = (g - b) / (delta + 1e-20f);
+    else if (g == rgb_max)
+        hue = 2 + (b - r) / (delta + 1e-20f);
+    else
+        hue = 4 + (r - g) / (delta + 1e-20f);
+    if (hue < 0)
+        hue += 6.f;
+    h = hue * (1.f / 6.f);
+}
 
 int main(int argc, char *argv[] )
 {
@@ -285,7 +304,15 @@ int main(int argc, char *argv[] )
 	}
 	yuv2rgb.setDebug(1);
 	bool success;
+#if 0
+	float tmp[4] = { 0.0, 1.0, 0.0, 0.0 };
+	if( g_masked>=0 ) {
+		tmp[0] = 1.0/g_masked;
+		success = yuv2rgb.Init(1, tmp);
+	}
+#else
 	if( g_masked>=0 ) success = yuv2rgb.Init(1, g_masks[g_masked]);
+#endif
 	else success = yuv2rgb.Init();
 	if( !success ) {
 		fprintf(stderr, "Failed to initialize yuv shader\n");
@@ -412,13 +439,21 @@ int main(int argc, char *argv[] )
 		//update when ever got
 		if( curBuf ) {
 			yuv2rgb.Apply(curBuf, (FMT_NV12==g_fmt) ? (curBuf+g_width*g_height): NULL, ratio);
-#if 1
+#if 0
 			if( 0==(nbFrames&63) ) {
 				unsigned char y=*curBuf;
 				unsigned char u=*(curBuf+g_width*g_height);
 				unsigned char v=*(curBuf+g_width*g_height+1);
 				printf("yuv = 0x%02x (%.03f), 0x%02x (%.03f), 0x%02x (%.03f)\n",
 					y, (float)y/255, u, (float)u/255, v, (float)v/255);
+				float y0 = (float)y-0.0625;
+				float u0 = (float)u-0.5;
+				float v0 = (float)v-0.5;
+				float r = y0*1.164+v0*1.787;
+				float g = y0*1.164-u0*0.213-v0*0.531;
+				float b = y0*1.164+u0*2.112;
+				RGB2HSV(r, g, b, y0, u0, v0);
+				printf("hsb = (%.03f, %.03f, %.03f)\n", y0, u0, v0);
 			}
 #endif
 		}

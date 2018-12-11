@@ -6,6 +6,12 @@
 
 #include "Shader.h"
 
+/* 0.29, 0.29 for GSM 
+   0.455, 0.396 for Green side
+   Blue side
+    if( distance(val.yz, vec2(0.698, 0.337))<0.2 ) \n\
+ */
+
 static const char *yuyv_to_rgb_vshader = "       \
 #version 330 core                              \n\
                                                \n\
@@ -21,18 +27,20 @@ void main()                                    \n\
 }                                              \n\
 ";
 
-
-static const char *yuyv_to_rgb_fshader = "       \
+static const char *yuv_declare_fsh = "\
 #version 330 core                              \n\
-                                               \n\
 uniform float inWidth;                         \n\
 uniform float maskOutOff;                      \n\
 uniform int color709;                          \n\
 uniform sampler2D Ytex;                        \n\
+uniform sampler2D Utex;                        \n\
                                                \n\
 in vec2 v_texcoord;                            \n\
 layout (location = 0) out vec4 fragColor;      \n\
-                                               \n\
+";
+
+
+static const char *yuv_2_rgb_fsh = "\
 vec3 yuv_to_rgb (vec3 val, mat3 coff_yuv) {    \n\
     vec3 rgb;                                  \n\
     val += vec3(-0.0625, -0.5, -0.5);          \n\
@@ -40,8 +48,33 @@ vec3 yuv_to_rgb (vec3 val, mat3 coff_yuv) {    \n\
     rgb.g = dot(val, coff_yuv[1]);             \n\
     rgb.b = dot(val, coff_yuv[2]);             \n\
     return rgb;                                \n\
-}                                              \n\
-                                               \n\
+}";
+
+
+/*
+ * 1st-var = u value
+ * 2nd-var = v value
+ * 3rd-var = uv-distance
+ * 4th-var = y value
+ * 5th-var = y-distance
+ * 6th-var = r-replace
+ * 7th-var = g-replace
+ * 8th-var = b-replace
+ */
+static const char *yuv_2_rgb_mask_fsh = "\
+vec3 yuv_to_rgb (vec3 val, mat3 coff_yuv) {    \n\
+    vec3 rgb;                                  \n\
+    if( distance(val.gb,vec2(%f,%f))<%f &&     \n\
+        distance(val.r,%f)<%f )                \n\
+        return vec3(%f,%f,%f);                 \n\
+    val += vec3(-0.0625, -0.5, -0.5);          \n\
+    rgb.r = dot(val, coff_yuv[0]);             \n\
+    rgb.g = dot(val, coff_yuv[1]);             \n\
+    rgb.b = dot(val, coff_yuv[2]);             \n\
+    return rgb;                                \n\
+}";
+
+static const char *yuyv_main_fsh = "\
 void main (void) {                             \n\
     mat3 m_709 = mat3(                         \n\
         // first column                        \n\
@@ -94,28 +127,14 @@ void main (void) {                             \n\
 }                                                  \n\
 ";
 
+static const char *yuyv_fsh[] = {
+	  yuv_declare_fsh
+	, yuv_2_rgb_fsh
+	, yuyv_main_fsh
+};
 
-static const char *nv12_to_rgb_fshader = "       \
-#version 330 core                              \n\
-                                               \n\
-uniform float inWidth;                         \n\
-uniform float maskOutOff;                      \n\
-uniform int color709;                          \n\
-uniform sampler2D Ytex;                        \n\
-uniform sampler2D Utex;                        \n\
-                                               \n\
-in vec2 v_texcoord;                            \n\
-layout (location = 0) out vec4 fragColor;      \n\
-                                               \n\
-vec3 yuv_to_rgb (vec3 val, mat3 coff_yuv) {    \n\
-    vec3 rgb;                                  \n\
-    val += vec3(-0.0625, -0.5, -0.5);          \n\
-    rgb.r = dot(val, coff_yuv[0]);             \n\
-    rgb.g = dot(val, coff_yuv[1]);             \n\
-    rgb.b = dot(val, coff_yuv[2]);             \n\
-    return rgb;                                \n\
-}                                              \n\
-                                               \n\
+
+static const char *nv12_main_fsh = "\
 void main (void) {                             \n\
     mat3 m_709 = mat3(                         \n\
         // first column                        \n\
@@ -150,8 +169,14 @@ void main (void) {                             \n\
         fragColor = vec4(                          \n\
             rgba.r,rgba.g,rgba.b,rgba.a);          \n\
     }                                              \n\
-}                                              \n\
+}                                                  \n\
 ";
+
+static const char *nv12_fsh[] = {
+	  yuv_declare_fsh
+	, yuv_2_rgb_fsh
+	, nv12_main_fsh
+};
 
 
 static const char *g_vars[] = {
@@ -171,7 +196,6 @@ typedef enum {
 
 class cYUYV2RGBA : public Shader {
 protected:
-
 	int                  m_inWidth;
 	int                  m_inHeight;
 	//shader var
@@ -218,11 +242,60 @@ public:
 		if( m_inTexture )
 			glDeleteTextures(m_texCount, m_inTexture);
 	}
-	int Init(bool linear=1) {
+	/*
+	 * replace 2nd as yuv_2_rgb_mask_fsh 
+	 * mask_param needs 8 floats
+	 */
+	char *composeShader(const char *progs[], int count, float *mask_param=NULL) {
+		int i, len;
+		char *buf;
+		char *maskBuf=NULL;
+		for( i=len=0; i<count; ++i ) {
+			if( 1==i && mask_param ) {  //todo hardcoding
+				int maskLen=strlen(yuv_2_rgb_mask_fsh) + 8*6 + 2;
+				maskBuf = (char*) malloc(maskLen);
+				if( !maskBuf ) {
+					DBG(0, "fail to allocate mask buffer\n");
+					return NULL;
+				}
+				sprintf(maskBuf, yuv_2_rgb_mask_fsh\
+					,mask_param[0]
+					,mask_param[1]
+					,mask_param[2]
+					,mask_param[3]
+					,mask_param[4]
+					,mask_param[5]
+					,mask_param[6]
+					,mask_param[7]);
+				len += maskLen;
+			} else len += strlen(progs[i])+2;
+		}
+		buf = (char *)malloc(len);
+		if( !buf ) {
+			if( maskBuf ) free(maskBuf);
+			return buf;    //error
+		}
+		for( buf[0]=0, i=0; i<count; ++i ) {
+			if( NULL==progs[i] ) continue;
+			if( 1==i && maskBuf ) {
+				strcat(buf, maskBuf);
+				free(maskBuf);
+				maskBuf = NULL;
+			} else strcat(buf, progs[i]);
+			//skip last
+			if( i!=(count-1) )
+				strcat(buf, "\n");
+		}
+		printf("%s\n", buf);
+		return buf;
+	}
+	//masks are 8 parameters
+	int Init(bool linear=1, float *masks=NULL) {
 		if( !m_inWidth || !m_inHeight ) {
 			DBG(0, "input dimension error\n");
 			return 0;
 		}
+		char *tmp_fsh = NULL;
 		switch ( m_pixfmt ) {
 		case FMT_NV12:
 			m_texCount = 2;
@@ -239,9 +312,14 @@ public:
 			m_fmtDesc[1].height = m_inHeight/2;
 			m_fmtDesc[1].size = GL_UNSIGNED_BYTE;
 			m_fmtDesc[1].uniformIndex = U_TEX;
+			tmp_fsh = composeShader(nv12_fsh, sizeof(nv12_fsh)/sizeof(nv12_fsh[0]), masks);
+			if( !tmp_fsh ) {
+				DBG(0, "fail to allocate shader\n");
+				return 0;
+			}
 			load( (char *)"nv12_to_rgba"
 				, yuyv_to_rgb_vshader
-				, nv12_to_rgb_fshader
+				, tmp_fsh
 			);
 			break;
 
@@ -253,9 +331,14 @@ public:
 			m_fmtDesc[0].height = m_inHeight;
 			m_fmtDesc[0].size = GL_UNSIGNED_BYTE;
 			m_fmtDesc[0].uniformIndex = Y_TEX;
+			tmp_fsh = composeShader(yuyv_fsh, sizeof(yuyv_fsh)/sizeof(yuyv_fsh[0]), masks);
+			if( !tmp_fsh ) {
+				DBG(0, "fail to allocate shader\n");
+				return 0;
+			}
 			load( (char *)"yuyv_to_rgba"
 				, yuyv_to_rgb_vshader
-				, yuyv_to_rgb_fshader
+				, tmp_fsh
 			);
 			break;
 		default:
@@ -263,6 +346,7 @@ public:
 			return 0;
 		}
 		
+		if( tmp_fsh ) free(tmp_fsh);
 		const GLfloat vertex[6][3] = {
 			{ -1.0f, -1.0f, 0.0f }, /* BL */
 			{  1.0f, -1.0f, 0.0f }, /* BR */

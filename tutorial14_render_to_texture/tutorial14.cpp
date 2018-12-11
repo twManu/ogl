@@ -28,6 +28,28 @@ static int g_height = 1080;
 static int g_devNr = 0;
 static eYUV_Fmt g_fmt = FMT_YUYV;
 static char g_dev_name[30];
+static int g_masked = -1;
+/*
+ * 1st-var = u value
+ * 2nd-var = v value
+ * 3rd-var = uv-distance
+ * 4th-var = y value
+ * 5th-var = y-distance
+ * 6th-var = r-replace
+ * 7th-var = g-replace
+ * 8th-var = b-replace
+ */
+#define MASK_SIZE          3
+static float g_masks[MASK_SIZE][8] = {
+	//blud
+//	{ 0.698, 0.337, 0.12, 0.0, 1.0, 1.0, 0.0, 0.0 },
+	{ 0.71, 0.34, 0.12, 0.550, 0.12, 1.0, 0.0, 0.0 },
+	//green
+	{ 0.4, 0.35, 0.12, 0.57, 0.12, 1.0, 0.0, 0.0 },
+	//gsm
+	{ 0.29, 0.29, 0.2, 0.0, 1.0, 1.0, 0.0, 0.0 }
+};
+
 
 #include <common/shader.hpp>
 #include <common/texture.hpp>
@@ -62,7 +84,7 @@ static void checkParm(int argc, char *argv[])
 {
 	int opt;
 
-	while( (opt = getopt(argc, argv, "hW:H:f:")) != -1) {
+	while( (opt = getopt(argc, argv, "hW:H:f:m:n:")) != -1) {
 		switch(opt) {
 		case 'W':
 			g_width = atoi(optarg);
@@ -76,14 +98,22 @@ static void checkParm(int argc, char *argv[])
 		case 'n':
 			g_devNr = atoi(optarg);
 			break;
+		case 'm':
+			g_masked = atoi(optarg);
+			if( g_masked>=MASK_SIZE ) {
+				printf("invalid mask index\n");
+				g_masked = -1;
+			}
+			break;
 		case 'h':
-			printf("Usage: tutorial14 [-W WIDTH] [-H HEIGHT] [-f FMT] [-n DEV_NR]\n");
+			printf("Usage: tutorial14 [-W WIDTH] [-H HEIGHT] [-f FMT] [-n DEV_NR] [-m INDEX]\n");
 			printf("\t -W WIDTH           source width, default=1920\n");
 			printf("\t -H HEIGHT          source height, default=1080\n");
 			printf("\t -n DEV_NR          device number, default=0 (/dev/video0)\n");
 			printf("\t -f FMT             source format, default=YUYV\n");
 			printf("\t          0   NV12\n");
 			printf("\t          1   YUYV\n");
+			printf("\t -m INDEX           index param for blue, green, and GSM\n");
 			abort();
 			break;
 		default:
@@ -254,7 +284,10 @@ int main(int argc, char *argv[] )
 		return -1;
 	}
 	yuv2rgb.setDebug(1);
-	if( !yuv2rgb.Init() ) {
+	bool success;
+	if( g_masked>=0 ) success = yuv2rgb.Init(1, g_masks[g_masked]);
+	else success = yuv2rgb.Init();
+	if( !success ) {
 		fprintf(stderr, "Failed to initialize yuv shader\n");
 		getchar();
 		glfwTerminate();
@@ -377,8 +410,18 @@ int main(int argc, char *argv[] )
 		float ratio = 1;
 #endif
 		//update when ever got
-		if( curBuf )
+		if( curBuf ) {
 			yuv2rgb.Apply(curBuf, (FMT_NV12==g_fmt) ? (curBuf+g_width*g_height): NULL, ratio);
+#if 1
+			if( 0==(nbFrames&63) ) {
+				unsigned char y=*curBuf;
+				unsigned char u=*(curBuf+g_width*g_height);
+				unsigned char v=*(curBuf+g_width*g_height+1);
+				printf("yuv = 0x%02x (%.03f), 0x%02x (%.03f), 0x%02x (%.03f)\n",
+					y, (float)y/255, u, (float)u/255, v, (float)v/255);
+			}
+#endif
+		}
 		if( index>=0 ) {
 			pthread_mutex_lock(&g_freeLock);
 			g_free.push_back(index);
